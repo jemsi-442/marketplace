@@ -1,0 +1,34 @@
+parameters:
+    env(APP_ENV): 'dev'
+    env(APP_SECRET): 'your_secret_here'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    # Auto-register everything inside src/
+    App\:
+        resource: '../src/*'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Migrations/'
+            - '../src/Tests/'
+            - '../src/Kernel.php'
+
+    # Controllers
+    App\Controller\:
+        resource: '../src/Controller/'
+        tags: ['controller.service_arguments']
+
+    # ==========================
+    # JWT SERVICE (RS256 Custom)
+    # ==========================
+    App\Service\JwtService:
+        arguments:
+            $privateKeyPath: '%kernel.project_dir%/config/jwt/private.pem'
+            $publicKeyPath: '%kernel.project_dir%/config/jwt/public.pem'
+            $accessTtl: 3600
+            $refreshTtl: 604800

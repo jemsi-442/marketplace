@@ -1,0 +1,22 @@
+# Symfony
+backend/vendor/
+backend/var/
+
+# Environment
+backend/.env
+backend/.env.local
+backend/.env.*.local
+
+# JWT Keys
+backend/config/jwt/private.pem
+backend/config/jwt/public.pem
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

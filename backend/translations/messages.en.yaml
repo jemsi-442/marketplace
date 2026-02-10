@@ -1,0 +1,8 @@
+user_registered: "User registered successfully. Please verify your email."
+invalid_credentials: "Invalid credentials."
+account_locked: "Account is locked due to multiple failed attempts."
+email_not_verified: "Email not verified."
+booking_not_found: "Booking not found or unauthorized."
+escrow_created: "Escrow created successfully."
+escrow_released: "Escrow released successfully."
+escrow_cancelled: "Escrow cancelled successfully."

@@ -1,0 +1,8 @@
+user_registered: "Mtumiaji amesajiliwa kwa mafanikio. Tafadhali thibitisha barua pepe yako."
+invalid_credentials: "Taarifa za kuingia si sahihi."
+account_locked: "Akaunti imefungwa kwa sababu ya majaribio mengi yasiyo sahihi."
+email_not_verified: "Barua pepe haijathibitishwa."
+booking_not_found: "Booking haikupatikana au huna ruhusa."
+escrow_created: "Escrow imeundwa kwa mafanikio."
+escrow_released: "Escrow imetolewa kwa mafanikio."
+escrow_cancelled: "Escrow imefutwa kwa mafanikio."
