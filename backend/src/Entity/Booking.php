@@ -10,6 +10,11 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'booking')]
 class Booking
 {
+    public const STATUS_PENDING   = 'pending';
+    public const STATUS_CONFIRMED = 'confirmed';
+    public const STATUS_COMPLETED = 'completed';
+    public const STATUS_CANCELLED = 'cancelled';
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'integer')]
@@ -23,25 +28,41 @@ class Booking
     #[ORM\JoinColumn(nullable: false)]
     private ?Service $service = null;
 
+    /*
+     * Owning side of Escrow relation
+     */
+    #[ORM\OneToOne(inversedBy: 'booking', targetEntity: Escrow::class, cascade: ['persist', 'remove'])]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Escrow $escrow = null;
+
     #[ORM\Column(type: 'string', length: 50)]
-    #[Assert\Choice(['pending', 'confirmed', 'completed', 'cancelled'])]
-    private string $status = 'pending';
+    #[Assert\Choice([
+        self::STATUS_PENDING,
+        self::STATUS_CONFIRMED,
+        self::STATUS_COMPLETED,
+        self::STATUS_CANCELLED
+    ])]
+    private string $status = self::STATUS_PENDING;
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $createdAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $updatedAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $updatedAt;
 
     public function __construct()
     {
-        $this->createdAt = new \DateTimeImmutable();
-        $this->updatedAt = new \DateTimeImmutable();
+        $now = new \DateTimeImmutable();
+        $this->createdAt = $now;
+        $this->updatedAt = $now;
     }
 
-    // =====================
-    // Getters & Setters
-    // =====================
+    /*
+     * ======================
+     * BASIC GETTERS
+     * ======================
+     */
+
     public function getId(): ?int
     {
         return $this->id;
@@ -69,6 +90,22 @@ class Booking
         return $this;
     }
 
+    public function getEscrow(): ?Escrow
+    {
+        return $this->escrow;
+    }
+
+    public function setEscrow(?Escrow $escrow): self
+    {
+        $this->escrow = $escrow;
+
+        if ($escrow && $escrow->getBooking() !== $this) {
+            $escrow->setBooking($this);
+        }
+
+        return $this;
+    }
+
     public function getStatus(): string
     {
         return $this->status;
@@ -77,28 +114,22 @@ class Booking
     public function setStatus(string $status): self
     {
         $this->status = $status;
+        $this->touch();
         return $this;
     }
 
-    public function getCreatedAt(): \DateTimeInterface
+    public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
     }
 
-    public function setCreatedAt(\DateTimeInterface $createdAt): self
-    {
-        $this->createdAt = $createdAt;
-        return $this;
-    }
-
-    public function getUpdatedAt(): \DateTimeInterface
+    public function getUpdatedAt(): \DateTimeImmutable
     {
         return $this->updatedAt;
     }
 
-    public function setUpdatedAt(\DateTimeInterface $updatedAt): self
+    public function touch(): void
     {
-        $this->updatedAt = $updatedAt;
-        return $this;
+        $this->updatedAt = new \DateTimeImmutable();
     }
 }

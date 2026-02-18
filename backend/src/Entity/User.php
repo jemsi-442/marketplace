@@ -2,134 +2,89 @@
 
 namespace App\Entity;
 
+use App\Repository\UserRepository;
 use Doctrine\ORM\Mapping as ORM;
-use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Validator\Constraints as Assert;
 
-/**
- * @ORM\Entity(repositoryClass="App\Repository\UserRepository")
- * @ORM\HasLifecycleCallbacks()
- * @ORM\Table(name="`user`")
- */
+#[ORM\Entity(repositoryClass: UserRepository::class)]
+#[ORM\HasLifecycleCallbacks]
+#[ORM\Table(name: 'user')]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
-    /**
-     * =========================
-     * PRIMARY KEY
-     * =========================
-     */
-
-    /**
-     * @ORM\Id
-     * @ORM\GeneratedValue
-     * @ORM\Column(type="integer")
-     */
+    /* =========================
+       PRIMARY KEY
+    ========================= */
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column(type: 'integer')]
     private ?int $id = null;
 
-    /**
-     * =========================
-     * AUTH CORE
-     * =========================
-     */
-
-    /**
-     * @ORM\Column(type="string", length=180, unique=true)
-     * @Assert\NotBlank()
-     * @Assert\Email()
-     */
+    /* =========================
+       AUTH CORE
+    ========================= */
+    #[ORM\Column(type: 'string', length: 180, unique: true)]
+    #[Assert\NotBlank]
+    #[Assert\Email]
     private string $email;
 
-    /**
-     * @ORM\Column(type="json")
-     */
+    #[ORM\Column(type: 'json')]
     private array $roles = [];
 
-    /**
-     * @ORM\Column(type="string")
-     * @Assert\NotBlank()
-     * @Assert\Length(min=8)
-     */
+    #[ORM\Column(type: 'string')]
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 8)]
     private string $password;
 
-    /**
-     * =========================
-     * SECURITY FLAGS
-     * =========================
-     */
-
-    /**
-     * @ORM\Column(type="boolean")
-     */
+    /* =========================
+       SECURITY FLAGS
+    ========================= */
+    #[ORM\Column(type: 'boolean')]
     private bool $isVerified = false;
 
-    /**
-     * @ORM\Column(type="boolean")
-     */
+    #[ORM\Column(type: 'boolean')]
     private bool $isLocked = false;
 
-    /**
-     * @ORM\Column(type="integer")
-     */
+    #[ORM\Column(type: 'integer')]
     private int $failedLoginAttempts = 0;
 
-    /**
-     * @ORM\Column(type="string", length=64, nullable=true)
-     */
+    #[ORM\Column(type: 'string', length: 64, nullable: true)]
     private ?string $verificationToken = null;
 
-    /**
-     * @ORM\Column(type="string", length=128, nullable=true)
-     */
+    #[ORM\Column(type: 'string', length: 128, nullable: true)]
     private ?string $refreshToken = null;
 
-    /**
-     * =========================
-     * TRUST & RISK ENGINE
-     * =========================
-     */
-
-    /**
-     * Score range: 0 – 100
-     *
-     * @ORM\Column(type="float")
-     */
+    /* =========================
+       TRUST & RISK ENGINE
+    ========================= */
+    #[ORM\Column(type: 'float')]
     private float $trustScore = 100.0;
 
-    /**
-     * LOW | MEDIUM | HIGH | CRITICAL
-     *
-     * @ORM\Column(type="string", length=20)
-     */
+    #[ORM\Column(type: 'string', length: 20)]
     private string $riskLevel = 'LOW';
 
-    /**
-     * @ORM\Column(type="datetime", nullable=true)
-     */
+    #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTimeInterface $lastRiskUpdate = null;
 
-    /**
-     * =========================
-     * TIMESTAMPS
-     * =========================
-     */
-
-    /**
-     * @ORM\Column(type="datetime")
-     */
+    /* =========================
+       TIMESTAMPS
+    ========================= */
+    #[ORM\Column(type: 'datetime')]
     private \DateTimeInterface $createdAt;
 
-    /**
-     * @ORM\Column(type="datetime")
-     */
+    #[ORM\Column(type: 'datetime')]
     private \DateTimeInterface $updatedAt;
 
-    /**
-     * =========================
-     * CONSTRUCTOR
-     * =========================
-     */
+    /* =========================
+       VENDOR PROFILE RELATION
+    ========================= */
+    #[ORM\OneToOne(mappedBy: 'user', targetEntity: VendorProfile::class, cascade: ['persist', 'remove'])]
+    private ?VendorProfile $vendorProfile = null;
 
+    /* =========================
+       CONSTRUCTOR
+    ========================= */
     public function __construct()
     {
         $this->roles = ['ROLE_CLIENT'];
@@ -139,12 +94,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->riskLevel = 'LOW';
     }
 
-    /**
-     * =========================
-     * BASIC GETTERS
-     * =========================
-     */
-
+    /* =========================
+       BASIC GETTERS / SETTERS
+    ========================= */
     public function getId(): ?int
     {
         return $this->id;
@@ -164,11 +116,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getRoles(): array
     {
         $roles = $this->roles;
-
         if (!in_array('ROLE_CLIENT', $roles)) {
             $roles[] = 'ROLE_CLIENT';
         }
-
         return array_unique($roles);
     }
 
@@ -189,12 +139,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    /**
-     * =========================
-     * SECURITY
-     * =========================
-     */
-
+    /* =========================
+       SECURITY METHODS
+    ========================= */
     public function isVerified(): bool
     {
         return $this->isVerified;
@@ -256,12 +203,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->refreshToken;
     }
 
-    /**
-     * =========================
-     * TRUST ENGINE METHODS
-     * =========================
-     */
-
+    /* =========================
+       TRUST ENGINE
+    ========================= */
     public function getTrustScore(): float
     {
         return $this->trustScore;
@@ -269,13 +213,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function setTrustScore(float $score): self
     {
-        // Normalize to 0 – 100
         $score = max(0, min(100, $score));
-
         $this->trustScore = round($score, 2);
         $this->updateRiskLevel();
         $this->lastRiskUpdate = new \DateTimeImmutable();
-
         return $this;
     }
 
@@ -302,12 +243,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         }
     }
 
-    /**
-     * =========================
-     * TIMESTAMPS
-     * =========================
-     */
-
+    /* =========================
+       TIMESTAMPS
+    ========================= */
     public function getCreatedAt(): \DateTimeInterface
     {
         return $this->createdAt;
@@ -318,20 +256,34 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->updatedAt;
     }
 
-    /**
-     * @ORM\PreUpdate
-     */
+    #[ORM\PreUpdate]
     public function preUpdate(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
     }
 
-    /**
-     * =========================
-     * SECURITY INTERFACE
-     * =========================
-     */
+    /* =========================
+       VENDOR PROFILE GETTER/SETTER
+    ========================= */
+    public function getVendorProfile(): ?VendorProfile
+    {
+        return $this->vendorProfile;
+    }
 
+    public function setVendorProfile(?VendorProfile $vendorProfile): self
+    {
+        $this->vendorProfile = $vendorProfile;
+
+        if ($vendorProfile && $vendorProfile->getUser() !== $this) {
+            $vendorProfile->setUser($this);
+        }
+
+        return $this;
+    }
+
+    /* =========================
+       SECURITY INTERFACE
+    ========================= */
     public function getUserIdentifier(): string
     {
         return $this->email;

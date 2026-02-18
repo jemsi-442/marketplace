@@ -12,14 +12,13 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/admin/escrow')]
 #[IsGranted('ROLE_ADMIN')]
-class AdminController extends AbstractController
+class EscrowController extends AbstractController
 {
     #[Route('/force-release/{escrowId}', methods: ['POST'])]
     public function forceRelease(
         int $escrowId,
         EntityManagerInterface $em
     ): JsonResponse {
-        /** @var Escrow|null $escrow */
         $escrow = $em->getRepository(Escrow::class)->find($escrowId);
 
         if (!$escrow) {
@@ -36,7 +35,6 @@ class AdminController extends AbstractController
         $escrow->setReleasedAt(new \DateTimeImmutable());
         $escrow->setAdminDecision('force_release');
 
-        // Update booking
         $booking = $escrow->getBooking();
         $booking->setStatus('completed');
 
@@ -52,7 +50,6 @@ class AdminController extends AbstractController
         int $escrowId,
         EntityManagerInterface $em
     ): JsonResponse {
-        /** @var Escrow|null $escrow */
         $escrow = $em->getRepository(Escrow::class)->find($escrowId);
 
         if (!$escrow) {
@@ -65,7 +62,6 @@ class AdminController extends AbstractController
             ], 400);
         }
 
-        // Create refund record
         $refund = new Payment();
         $refund->setUser($escrow->getClient());
         $refund->setAmount($escrow->getAmount());
@@ -77,7 +73,6 @@ class AdminController extends AbstractController
         $escrow->setAdminDecision('refund');
         $escrow->setResolvedAt(new \DateTimeImmutable());
 
-        // Update booking
         $booking = $escrow->getBooking();
         $booking->setStatus('cancelled');
 

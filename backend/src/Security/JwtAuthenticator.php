@@ -2,83 +2,78 @@
 
 namespace App\Security;
 
-use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Service\JwtService;
-use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Http\Authenticator\AbstractAuthenticator;
+use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
+use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
+use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 
-class JwtAuthenticator extends AbstractAuthenticator
+final class JwtAuthenticator extends AbstractAuthenticator
 {
     public function __construct(
         private JwtService $jwtService,
-        private UserRepository $userRepository,
-        private EntityManagerInterface $em
+        private UserRepository $userRepository
     ) {}
 
     public function supports(Request $request): ?bool
     {
-        return $request->headers->has('Authorization');
+        $header = $request->headers->get('Authorization');
+        return $header && str_starts_with($header, 'Bearer ');
     }
 
-    public function authenticate(Request $request)
+    public function authenticate(Request $request): Passport
     {
         $authHeader = $request->headers->get('Authorization');
+
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
             throw new CustomUserMessageAuthenticationException('Missing Bearer token');
         }
 
-        $token = substr($authHeader, 7);
-        $payload = $this->jwtService->validate($token);
+        $jwt = substr($authHeader, 7);
 
-        if (!$payload) {
+        $payload = $this->jwtService->validate($jwt);
+
+        if (!$payload || !isset($payload['sub'])) {
             throw new CustomUserMessageAuthenticationException('Invalid or expired token');
         }
 
-        $userId = $payload['sub'] ?? null;
-        if (!$userId) {
-            throw new CustomUserMessageAuthenticationException('Invalid token payload');
-        }
+        return new SelfValidatingPassport(
+            new UserBadge(
+                (string) $payload['sub'],
+                function (string $userIdentifier) {
+                    $user = $this->userRepository->find($userIdentifier);
 
-        $user = $this->userRepository->find($userId);
-        if (!$user) {
-            throw new CustomUserMessageAuthenticationException('User not found');
-        }
+                    if (!$user) {
+                        throw new CustomUserMessageAuthenticationException('User not found');
+                    }
 
-        if ($user->getIsLocked()) {
-            throw new CustomUserMessageAuthenticationException('Account is locked');
-        }
-
-        if (!$user->getIsVerified()) {
-            throw new CustomUserMessageAuthenticationException('Email not verified');
-        }
-
-        // Return UserInterface for Symfony
-        return new class($user) implements UserInterface {
-            public function __construct(private User $user) {}
-            public function getRoles(): array { return $this->user->getRoles(); }
-            public function getPassword(): ?string { return $this->user->getPassword(); }
-            public function getUserIdentifier(): string { return $this->user->getEmail(); }
-            public function eraseCredentials(): void {}
-        };
+                    return $user;
+                }
+            )
+        );
     }
 
-    public function onAuthenticationSuccess(Request $request, $token, string $firewallName): ?JsonResponse
-    {
-        // Continue request without interruption
-        return null;
-    }
-
-    public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?JsonResponse
-    {
+    public function onAuthenticationFailure(
+        Request $request,
+        AuthenticationException $exception
+    ): ?JsonResponse {
         return new JsonResponse([
-            'error' => 'Authentication Failed',
+            'error' => 'authentication_failed',
             'message' => $exception->getMessage()
         ], 401);
+    }
+
+    public function onAuthenticationSuccess(
+        Request $request,
+        TokenInterface $token,
+        string $firewallName
+    ): ?JsonResponse {
+        return null;
     }
 }

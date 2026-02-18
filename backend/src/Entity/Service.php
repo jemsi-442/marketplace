@@ -26,28 +26,36 @@ class Service
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $description = null;
 
+    /*
+     * MONEY — Stored as DECIMAL (string internally)
+     * Prevents float precision issues
+     */
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]
     #[Assert\NotBlank]
-    private float $price = 0.0;
+    private string $price = '0.00';
 
     #[ORM\Column(type: 'string', length: 100, nullable: true)]
     private ?string $category = null;
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $createdAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $updatedAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $updatedAt;
 
     public function __construct()
     {
-        $this->createdAt = new \DateTimeImmutable();
-        $this->updatedAt = new \DateTimeImmutable();
+        $now = new \DateTimeImmutable();
+        $this->createdAt = $now;
+        $this->updatedAt = $now;
     }
 
-    // =====================
-    // Getters & Setters
-    // =====================
+    /*
+     * ==========================
+     * BASIC GETTERS & SETTERS
+     * ==========================
+     */
+
     public function getId(): ?int
     {
         return $this->id;
@@ -86,15 +94,34 @@ class Service
         return $this;
     }
 
+    /*
+     * Return float for business logic
+     * Stored internally as string
+     */
     public function getPrice(): float
     {
-        return $this->price;
+        return (float) $this->price;
     }
 
+    /*
+     * Accept float input but normalize to string
+     */
     public function setPrice(float $price): self
     {
-        $this->price = $price;
+        if ($price < 0) {
+            throw new \LogicException('Service price cannot be negative.');
+        }
+
+        $this->price = number_format($price, 2, '.', '');
         return $this;
+    }
+
+    /*
+     * Optional: Raw value if needed
+     */
+    public function getRawPrice(): string
+    {
+        return $this->price;
     }
 
     public function getCategory(): ?string
@@ -108,25 +135,18 @@ class Service
         return $this;
     }
 
-    public function getCreatedAt(): \DateTimeInterface
+    public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
     }
 
-    public function setCreatedAt(\DateTimeInterface $createdAt): self
-    {
-        $this->createdAt = $createdAt;
-        return $this;
-    }
-
-    public function getUpdatedAt(): \DateTimeInterface
+    public function getUpdatedAt(): \DateTimeImmutable
     {
         return $this->updatedAt;
     }
 
-    public function setUpdatedAt(\DateTimeInterface $updatedAt): self
+    public function touch(): void
     {
-        $this->updatedAt = $updatedAt;
-        return $this;
+        $this->updatedAt = new \DateTimeImmutable();
     }
 }

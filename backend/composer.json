@@ -18,7 +18,6 @@
         "symfony/flex": "^2",
         "symfony/form": "8.0.*",
         "symfony/framework-bundle": "8.0.*",
-        "symfony/maker-bundle": "^1.65",
         "symfony/rate-limiter": "8.0.*",
         "symfony/runtime": "8.0.*",
         "symfony/security-bundle": "8.0.*",
@@ -80,6 +79,7 @@
     },
     "require-dev": {
         "symfony/debug-bundle": "8.0.*",
+        "symfony/maker-bundle": "^1.66",
         "symfony/stopwatch": "8.0.*",
         "symfony/web-profiler-bundle": "8.0.*"
     }

@@ -8,24 +8,22 @@ services:
         autoconfigure: true
         public: false
 
-    # Auto-register everything inside src/
+    # Load whole src except these
     App\:
-        resource: '../src/*'
+        resource: '../src/'
         exclude:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
-            - '../src/Migrations/'
-            - '../src/Tests/'
+            - '../src/Domain/'
             - '../src/Kernel.php'
 
-    # Controllers
+    # Controllers must be public
     App\Controller\:
         resource: '../src/Controller/'
+        public: true
         tags: ['controller.service_arguments']
 
-    # ==========================
-    # JWT SERVICE (RS256 Custom)
-    # ==========================
+    # Explicit service definition (example: JwtService)
     App\Service\JwtService:
         arguments:
             $privateKeyPath: '%kernel.project_dir%/config/jwt/private.pem'
