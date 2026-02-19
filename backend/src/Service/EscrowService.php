@@ -4,48 +4,55 @@ namespace App\Service;
 
 use App\Entity\Booking;
 use App\Entity\Escrow;
-use App\Entity\Payment;
 use App\Entity\User;
-use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\DBAL\LockMode;
+use Doctrine\ORM\EntityManagerInterface;
 
 class EscrowService
 {
-    public const STATUS_HELD      = 'held';
-    public const STATUS_RELEASED  = 'released';
-    public const STATUS_REFUNDED  = 'refunded';
-    public const STATUS_DISPUTED  = 'disputed';
+    public const STATUS_HELD     = 'HELD';
+    public const STATUS_RELEASED = 'RELEASED';
+    public const STATUS_REFUNDED = 'REFUNDED';
+    public const STATUS_DISPUTED = 'DISPUTED';
 
     public function __construct(
         private EntityManagerInterface $em,
-        private EscrowAuditLogger $auditLogger
+        private EscrowAuditLogger $auditLogger,
+        private VendorWalletService $walletService,
+        private PlatformFeeService $platformFeeService
     ) {}
 
-    /**
-     * Create escrow (idempotent-safe)
-     */
+    /* ============================================================
+       CREATE ESCROW (CENTS SAFE)
+       ============================================================ */
+
     public function createEscrow(
         Booking $booking,
         User $client,
         User $vendor,
-        float $amount
+        int $amountCents
     ): Escrow {
 
-        if ($amount <= 0) {
-            throw new \LogicException('Escrow amount must be greater than zero.');
+        if ($amountCents <= 0) {
+            throw new \LogicException('Escrow amount must be positive.');
         }
 
         if ($booking->getEscrow()) {
             throw new \LogicException('Escrow already exists for this booking.');
         }
 
-        return $this->em->wrapInTransaction(function () use ($booking, $client, $vendor, $amount) {
+        return $this->em->wrapInTransaction(function () use (
+            $booking,
+            $client,
+            $vendor,
+            $amountCents
+        ) {
 
             $escrow = new Escrow();
             $escrow->setBooking($booking);
             $escrow->setClient($client);
             $escrow->setVendor($vendor);
-            $escrow->setAmount($amount);
+            $escrow->setAmountCents($amountCents);
             $escrow->setStatus(self::STATUS_HELD);
             $escrow->setCreatedAt(new \DateTimeImmutable());
 
@@ -53,22 +60,20 @@ class EscrowService
             $this->em->flush();
 
             $this->auditLogger->log(
-                escrow: $escrow,
-                action: 'ESCROW_CREATED',
-                actor: $client,
-                metadata: [
-                    'booking_id' => $booking->getId(),
-                    'amount' => $amount
-                ]
+                $escrow,
+                'ESCROW_CREATED',
+                $client,
+                ['amount_cents' => $amountCents]
             );
 
             return $escrow;
         });
     }
 
-    /**
-     * Client confirms → release funds
-     */
+    /* ============================================================
+       CLIENT RELEASE
+       ============================================================ */
+
     public function releaseByClient(Escrow $escrow, User $client): void
     {
         $this->em->wrapInTransaction(function () use ($escrow, $client) {
@@ -78,38 +83,51 @@ class EscrowService
             $this->assertState($escrow, self::STATUS_HELD);
             $this->assertOwnership($escrow->getClient(), $client);
 
-            if ($escrow->getReleasedAt()) {
-                throw new \LogicException('Escrow already released.');
-            }
+            $amount = $escrow->getAmountCents();
+
+            // Calculate platform fee
+            $feeCents = $this->platformFeeService->calculateFee($amount);
+            $vendorNet = $amount - $feeCents;
+
+            // Credit vendor wallet
+            $this->walletService->credit(
+                user: $escrow->getVendor(),
+                amountCents: $vendorNet,
+                reference: 'ESCROW_RELEASE'
+            );
+
+            // Credit platform revenue ledger
+            $this->platformFeeService->recordRevenue(
+                amountCents: $feeCents,
+                escrow: $escrow
+            );
 
             $escrow->setStatus(self::STATUS_RELEASED);
             $escrow->setReleasedAt(new \DateTimeImmutable());
-            $escrow->setAdminDecision('client_confirmed');
 
             $escrow->getBooking()->setStatus('completed');
 
-            $payment = $this->createPayment(
-                user: $escrow->getVendor(),
-                amount: $escrow->getAmount(),
-                method: 'escrow_release'
-            );
-
             $this->auditLogger->log(
-                escrow: $escrow,
-                action: 'ESCROW_RELEASED_BY_CLIENT',
-                actor: $client,
-                metadata: ['amount' => $escrow->getAmount()]
+                $escrow,
+                'ESCROW_RELEASED',
+                $client,
+                [
+                    'gross_cents' => $amount,
+                    'fee_cents'   => $feeCents,
+                    'net_cents'   => $vendorNet
+                ]
             );
         });
     }
 
-    /**
-     * Client opens dispute
-     */
+    /* ============================================================
+       DISPUTE
+       ============================================================ */
+
     public function openDispute(Escrow $escrow, User $client, string $reason): void
     {
         if (trim($reason) === '') {
-            throw new \LogicException('Dispute reason cannot be empty.');
+            throw new \LogicException('Dispute reason required.');
         }
 
         $this->em->wrapInTransaction(function () use ($escrow, $client, $reason) {
@@ -124,51 +142,18 @@ class EscrowService
             $escrow->setDisputedAt(new \DateTimeImmutable());
 
             $this->auditLogger->log(
-                escrow: $escrow,
-                action: 'ESCROW_DISPUTED',
-                actor: $client,
-                metadata: ['reason' => $reason]
+                $escrow,
+                'ESCROW_DISPUTED',
+                $client,
+                ['reason' => $reason]
             );
         });
     }
 
-    /**
-     * Admin force release (vendor wins)
-     */
-    public function forceReleaseByAdmin(Escrow $escrow, User $admin): void
-    {
-        $this->assertAdmin($admin);
+    /* ============================================================
+       ADMIN REFUND
+       ============================================================ */
 
-        $this->em->wrapInTransaction(function () use ($escrow, $admin) {
-
-            $this->em->lock($escrow, LockMode::PESSIMISTIC_WRITE);
-
-            $this->assertState($escrow, self::STATUS_DISPUTED);
-
-            $escrow->setStatus(self::STATUS_RELEASED);
-            $escrow->setReleasedAt(new \DateTimeImmutable());
-            $escrow->setAdminDecision('force_release');
-
-            $escrow->getBooking()->setStatus('completed');
-
-            $this->createPayment(
-                user: $escrow->getVendor(),
-                amount: $escrow->getAmount(),
-                method: 'admin_force_release'
-            );
-
-            $this->auditLogger->log(
-                escrow: $escrow,
-                action: 'ESCROW_FORCE_RELEASED_BY_ADMIN',
-                actor: $admin,
-                metadata: ['amount' => $escrow->getAmount()]
-            );
-        });
-    }
-
-    /**
-     * Admin refund (client wins)
-     */
     public function refundByAdmin(Escrow $escrow, User $admin): void
     {
         $this->assertAdmin($admin);
@@ -181,27 +166,23 @@ class EscrowService
 
             $escrow->setStatus(self::STATUS_REFUNDED);
             $escrow->setResolvedAt(new \DateTimeImmutable());
-            $escrow->setAdminDecision('refund');
 
             $escrow->getBooking()->setStatus('cancelled');
 
-            $this->createPayment(
-                user: $escrow->getClient(),
-                amount: $escrow->getAmount(),
-                method: 'escrow_refund'
-            );
+            // If external gateway refund is needed,
+            // call payment gateway adapter here.
 
             $this->auditLogger->log(
-                escrow: $escrow,
-                action: 'ESCROW_REFUNDED_BY_ADMIN',
-                actor: $admin,
-                metadata: ['amount' => $escrow->getAmount()]
+                $escrow,
+                'ESCROW_REFUNDED',
+                $admin,
+                ['amount_cents' => $escrow->getAmountCents()]
             );
         });
     }
 
     /* ============================================================
-       INTERNAL GUARDS
+       GUARDS
        ============================================================ */
 
     private function assertState(Escrow $escrow, string $expected): void
@@ -229,24 +210,5 @@ class EscrowService
         if (!in_array('ROLE_ADMIN', $user->getRoles(), true)) {
             throw new \LogicException('Admin privileges required.');
         }
-    }
-
-    private function createPayment(User $user, float $amount, string $method): Payment
-    {
-        if ($amount <= 0) {
-            throw new \LogicException('Invalid payment amount.');
-        }
-
-        $payment = new Payment();
-        $payment->setUser($user);
-        $payment->setAmount($amount);
-        $payment->setMethod($method);
-        $payment->setStatus('success');
-        $payment->setCreatedAt(new \DateTimeImmutable());
-
-        $this->em->persist($payment);
-        $this->em->flush();
-
-        return $payment;
     }
 }

@@ -8,6 +8,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: ServiceRepository::class)]
 #[ORM\Table(name: 'service')]
+#[ORM\Index(name: 'idx_service_vendor', columns: ['vendor_id'])]
+#[ORM\Index(name: 'idx_service_category', columns: ['category'])]
+#[ORM\HasLifecycleCallbacks]
 class Service
 {
     #[ORM\Id]
@@ -15,8 +18,11 @@ class Service
     #[ORM\Column(type: 'integer')]
     private ?int $id = null;
 
+    /*
+     * RELATIONSHIP — Restrict delete for financial safety
+     */
     #[ORM\ManyToOne(targetEntity: VendorProfile::class)]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: false, onDelete: 'RESTRICT')]
     private ?VendorProfile $vendor = null;
 
     #[ORM\Column(type: 'string', length: 255)]
@@ -27,21 +33,38 @@ class Service
     private ?string $description = null;
 
     /*
-     * MONEY — Stored as DECIMAL (string internally)
+     * MONEY — Stored as INTEGER (cents)
      * Prevents float precision issues
      */
-    #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]
-    #[Assert\NotBlank]
-    private string $price = '0.00';
+    #[ORM\Column(type: 'integer')]
+    private int $priceCents = 0;
 
     #[ORM\Column(type: 'string', length: 100, nullable: true)]
     private ?string $category = null;
 
+    /*
+     * STATE CONTROL
+     */
+    #[ORM\Column(type: 'boolean')]
+    private bool $isActive = true;
+
+    /*
+     * VERSIONING — For price integrity tracking
+     */
+    #[ORM\Column(type: 'integer')]
+    private int $version = 1;
+
+    /*
+     * AUDIT FIELDS
+     */
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $updatedAt;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $deletedAt = null;
 
     public function __construct()
     {
@@ -52,7 +75,7 @@ class Service
 
     /*
      * ==========================
-     * BASIC GETTERS & SETTERS
+     * BASIC GETTERS
      * ==========================
      */
 
@@ -66,21 +89,9 @@ class Service
         return $this->vendor;
     }
 
-    public function setVendor(VendorProfile $vendor): self
-    {
-        $this->vendor = $vendor;
-        return $this;
-    }
-
     public function getTitle(): string
     {
         return $this->title;
-    }
-
-    public function setTitle(string $title): self
-    {
-        $this->title = $title;
-        return $this;
     }
 
     public function getDescription(): ?string
@@ -88,51 +99,19 @@ class Service
         return $this->description;
     }
 
-    public function setDescription(?string $description): self
-    {
-        $this->description = $description;
-        return $this;
-    }
-
-    /*
-     * Return float for business logic
-     * Stored internally as string
-     */
-    public function getPrice(): float
-    {
-        return (float) $this->price;
-    }
-
-    /*
-     * Accept float input but normalize to string
-     */
-    public function setPrice(float $price): self
-    {
-        if ($price < 0) {
-            throw new \LogicException('Service price cannot be negative.');
-        }
-
-        $this->price = number_format($price, 2, '.', '');
-        return $this;
-    }
-
-    /*
-     * Optional: Raw value if needed
-     */
-    public function getRawPrice(): string
-    {
-        return $this->price;
-    }
-
     public function getCategory(): ?string
     {
         return $this->category;
     }
 
-    public function setCategory(?string $category): self
+    public function isActive(): bool
     {
-        $this->category = $category;
-        return $this;
+        return $this->isActive;
+    }
+
+    public function getVersion(): int
+    {
+        return $this->version;
     }
 
     public function getCreatedAt(): \DateTimeImmutable
@@ -145,7 +124,93 @@ class Service
         return $this->updatedAt;
     }
 
-    public function touch(): void
+    public function getDeletedAt(): ?\DateTimeImmutable
+    {
+        return $this->deletedAt;
+    }
+
+    /*
+     * ==========================
+     * MONEY HANDLING (SAFE)
+     * ==========================
+     */
+
+    public function getPriceCents(): int
+    {
+        return $this->priceCents;
+    }
+
+    public function getPrice(): float
+    {
+        return $this->priceCents / 100;
+    }
+
+    public function setPrice(float $price): self
+    {
+        if ($price < 0) {
+            throw new \LogicException('Service price cannot be negative.');
+        }
+
+        $newCents = (int) round($price * 100);
+
+        if ($this->priceCents !== $newCents) {
+            $this->version++;
+        }
+
+        $this->priceCents = $newCents;
+
+        return $this;
+    }
+
+    /*
+     * ==========================
+     * MUTATORS
+     * ==========================
+     */
+
+    public function setVendor(VendorProfile $vendor): self
+    {
+        $this->vendor = $vendor;
+        return $this;
+    }
+
+    public function setTitle(string $title): self
+    {
+        $this->title = $title;
+        return $this;
+    }
+
+    public function setDescription(?string $description): self
+    {
+        $this->description = $description;
+        return $this;
+    }
+
+    public function setCategory(?string $category): self
+    {
+        $this->category = $category;
+        return $this;
+    }
+
+    public function deactivate(): void
+    {
+        $this->isActive = false;
+    }
+
+    public function softDelete(): void
+    {
+        $this->deletedAt = new \DateTimeImmutable();
+        $this->isActive = false;
+    }
+
+    /*
+     * ==========================
+     * LIFECYCLE CALLBACKS
+     * ==========================
+     */
+
+    #[ORM\PreUpdate]
+    public function onPreUpdate(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
     }
