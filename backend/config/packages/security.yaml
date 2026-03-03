@@ -14,6 +14,11 @@ security:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
 
+        snippe_webhooks:
+            pattern: ^/api/payments/webhooks
+            stateless: true
+            security: false
+
         api:
             pattern: ^/api
             stateless: true
@@ -22,8 +27,11 @@ security:
                 - App\Security\JwtAuthenticator
 
     access_control:
+        - { path: ^/webhooks/snippe, roles: PUBLIC_ACCESS }
         - { path: ^/api/login, roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
+        - { route: snippe_collection_webhook, roles: PUBLIC_ACCESS }
+        - { route: snippe_payout_webhook, roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: ROLE_USER }
 
     role_hierarchy:

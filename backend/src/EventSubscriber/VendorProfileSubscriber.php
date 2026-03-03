@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\EventSubscriber;
 
 use App\Entity\User;
@@ -10,11 +12,8 @@ use Symfony\Component\Security\Http\Event\InteractiveLoginEvent;
 
 class VendorProfileSubscriber implements EventSubscriberInterface
 {
-    private EntityManagerInterface $em;
-
-    public function __construct(EntityManagerInterface $em)
+    public function __construct(private readonly EntityManagerInterface $em)
     {
-        $this->em = $em;
     }
 
     /**
@@ -42,9 +41,7 @@ class VendorProfileSubscriber implements EventSubscriberInterface
         ) {
             $vendorProfile = new VendorProfile();
             $vendorProfile->setUser($user);
-            $vendorProfile->setDisplayName($user->getEmail());
-            $vendorProfile->setVerified(false);
-            $vendorProfile->setCreatedAt(new \DateTimeImmutable());
+            $vendorProfile->setCompanyName(sprintf('Vendor %s', $user->getId() ?? $user->getEmail()));
 
             $this->em->persist($vendorProfile);
             $this->em->flush();

@@ -1,99 +1,138 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controller;
 
-use App\Entity\Payment;
-use App\Repository\BookingRepository;
-use App\Repository\PaymentRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Entity\User;
+use App\Repository\EscrowRepository;
+use App\Service\EscrowService;
+use App\Service\SnippeClient;
+use App\Service\SnippeWebhookService;
+use App\Service\WithdrawalService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/api/payments')]
 class PaymentController extends AbstractController
 {
-    #[Route('/pay', name: 'payment_create', methods: ['POST'])]
-    public function pay(
-        Request $request,
-        EntityManagerInterface $em,
-        BookingRepository $bookingRepo,
-        PaymentRepository $paymentRepo
-    ): JsonResponse {
+    public function __construct(
+        private readonly EscrowService $escrowService,
+        private readonly WithdrawalService $withdrawalService,
+        private readonly SnippeClient $snippeClient,
+        private readonly SnippeWebhookService $webhookService,
+        private readonly EscrowRepository $escrowRepository
+    ) {
+    }
+
+    #[Route('/escrows/{escrowId}/collect', name: 'payment_create_collection', methods: ['POST'])]
+    public function createCollection(int $escrowId, Request $request): JsonResponse
+    {
         $user = $this->getUser();
-        if (!$user || !in_array('ROLE_CLIENT', $user->getRoles())) {
+        if (!$user instanceof User) {
             return $this->json(['error' => 'Unauthorized'], 403);
         }
 
-        $data = json_decode($request->getContent(), true) ?? [];
-        $bookingId = $data['bookingId'] ?? null;
-        $amount = (float)($data['amount'] ?? 0);
-
-        if (!$bookingId || $amount <= 0) {
-            return $this->json(['error' => 'bookingId and valid amount required'], 400);
+        $escrow = $this->escrowRepository->find($escrowId);
+        if ($escrow === null) {
+            return $this->json(['error' => 'Escrow not found'], 404);
         }
 
-        $booking = $bookingRepo->find($bookingId);
-        if (!$booking || $booking->getClient()->getId() !== $user->getId()) {
-            return $this->json(['error' => 'Booking not found or unauthorized'], 404);
+        if ($escrow->getClient()->getId() !== $user->getId()) {
+            return $this->json(['error' => 'Only escrow client can initiate collection'], 403);
         }
 
-        // Check if payment already exists for booking
-        $existingPayment = $paymentRepo->findOneBy(['booking' => $booking]);
-        if ($existingPayment) {
-            return $this->json(['error' => 'Payment already exists for this booking'], 409);
+        $payload = json_decode($request->getContent(), true) ?? [];
+        $msisdn = (string) ($payload['msisdn'] ?? '');
+        $provider = (string) ($payload['provider'] ?? '');
+        $callbackUrl = (string) ($payload['callback_url'] ?? '/api/payments/webhooks/collection');
+
+        if ($msisdn === '' || $provider === '') {
+            return $this->json(['error' => 'msisdn and provider are required'], 400);
         }
 
-        $payment = new Payment();
-        $payment->setBooking($booking);
-        $payment->setAmount($amount);
-
-        // Fake payment processing (replace with real gateway later)
-        $payment->setStatus('completed');
-
-        $em->persist($payment);
-        $em->flush();
+        $response = $this->escrowService->initiateCollectionPayment($escrow, $msisdn, $provider, $callbackUrl);
 
         return $this->json([
-            'message' => 'Payment successful',
-            'payment' => [
-                'id' => $payment->getId(),
-                'bookingId' => $booking->getId(),
-                'amount' => $payment->getAmount(),
-                'status' => $payment->getStatus(),
-                'createdAt' => $payment->getCreatedAt()->format('Y-m-d H:i:s'),
-            ]
+            'message' => 'Collection session created',
+            'escrow_reference' => $escrow->getReference(),
+            'gateway' => $response,
         ], 201);
     }
 
-    #[Route('/history', name: 'payment_history', methods: ['GET'])]
-    public function history(PaymentRepository $repo): JsonResponse
+    #[Route('/webhooks/collection', name: 'snippe_collection_webhook', methods: ['POST'])]
+    public function collectionWebhook(Request $request): JsonResponse
     {
-        $user = $this->getUser();
-        if (!$user) {
-            return $this->json(['error' => 'Unauthorized'], 403);
+        $rawBody = $request->getContent();
+        $signature = $request->headers->get('X-Snippe-Signature');
+
+        if (!$this->snippeClient->verifyWebhookSignature($rawBody, $signature)) {
+            return $this->json(['error' => 'Invalid or missing webhook signature'], 401);
         }
 
-        $payments = $repo->createQueryBuilder('p')
-            ->join('p.booking', 'b')
-            ->where('b.client = :user OR b.vendor = :user')
-            ->setParameter('user', $user)
-            ->orderBy('p.createdAt', 'DESC')
-            ->getQuery()
-            ->getResult();
-
-        $result = [];
-        foreach ($payments as $p) {
-            $result[] = [
-                'id' => $p->getId(),
-                'bookingId' => $p->getBooking()->getId(),
-                'amount' => $p->getAmount(),
-                'status' => $p->getStatus(),
-                'createdAt' => $p->getCreatedAt()->format('Y-m-d H:i:s'),
-            ];
+        $payload = json_decode($rawBody, true);
+        if (!is_array($payload)) {
+            return $this->json(['error' => 'Invalid JSON payload'], 400);
         }
 
-        return $this->json(['payments' => $result]);
+        $reference = (string) ($payload['reference'] ?? '');
+        if ($reference === '') {
+            return $this->json(['error' => 'Missing webhook reference'], 400);
+        }
+
+        $isNewEvent = $this->webhookService->recordIncoming($reference, 'COLLECTION', $payload, $signature);
+        if (!$isNewEvent) {
+            return $this->json(['message' => 'Duplicate webhook ignored'], 202);
+        }
+
+        try {
+            $this->escrowService->handleCollectionWebhook($payload);
+        } catch (\RuntimeException $e) {
+            return $this->json([
+                'message' => 'Webhook recorded but not applied',
+                'reason' => $e->getMessage(),
+            ], 202);
+        }
+
+        return $this->json(['message' => 'Webhook processed'], 202);
+    }
+
+    #[Route('/webhooks/payout', name: 'snippe_payout_webhook', methods: ['POST'])]
+    public function payoutWebhook(Request $request): JsonResponse
+    {
+        $rawBody = $request->getContent();
+        $signature = $request->headers->get('X-Snippe-Signature');
+
+        if (!$this->snippeClient->verifyWebhookSignature($rawBody, $signature)) {
+            return $this->json(['error' => 'Invalid or missing webhook signature'], 401);
+        }
+
+        $payload = json_decode($rawBody, true);
+        if (!is_array($payload)) {
+            return $this->json(['error' => 'Invalid JSON payload'], 400);
+        }
+
+        $reference = (string) ($payload['reference'] ?? '');
+        if ($reference === '') {
+            return $this->json(['error' => 'Missing webhook reference'], 400);
+        }
+
+        $isNewEvent = $this->webhookService->recordIncoming($reference, 'PAYOUT', $payload, $signature);
+        if (!$isNewEvent) {
+            return $this->json(['message' => 'Duplicate webhook ignored'], 202);
+        }
+
+        try {
+            $this->withdrawalService->handlePayoutWebhook($payload);
+        } catch (\RuntimeException $e) {
+            return $this->json([
+                'message' => 'Webhook recorded but not applied',
+                'reason' => $e->getMessage(),
+            ], 202);
+        }
+
+        return $this->json(['message' => 'Webhook processed'], 202);
     }
 }

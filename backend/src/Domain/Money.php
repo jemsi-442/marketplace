@@ -1,27 +1,45 @@
+<?php
+
+declare(strict_types=1);
+
 namespace App\Domain;
+
+use App\Exception\Domain\CurrencyMismatchException;
+use App\Exception\Domain\InvalidMoneyOperationException;
 
 final class Money
 {
     private function __construct(
-        private int $amountMinor,
-        private string $currency
-    ) {}
+        private readonly int $amountMinor,
+        private readonly string $currency
+    ) {
+    }
 
     public static function fromMinor(int $amountMinor, string $currency): self
     {
-        if ($amountMinor <= 0) {
-            throw new \InvalidArgumentException('Amount must be greater than zero.');
+        if ($amountMinor < 0) {
+            throw new InvalidMoneyOperationException('Amount must be zero or positive.');
         }
 
-        return new self($amountMinor, strtoupper($currency));
+        $normalizedCurrency = strtoupper(trim($currency));
+        if (strlen($normalizedCurrency) !== 3) {
+            throw new InvalidMoneyOperationException('Currency must be a 3-letter ISO code.');
+        }
+
+        return new self($amountMinor, $normalizedCurrency);
     }
 
-    public function getAmountMinor(): int
+    public static function zero(string $currency): self
+    {
+        return self::fromMinor(0, $currency);
+    }
+
+    public function amountMinor(): int
     {
         return $this->amountMinor;
     }
 
-    public function getCurrency(): string
+    public function currency(): string
     {
         return $this->currency;
     }
@@ -30,10 +48,7 @@ final class Money
     {
         $this->assertSameCurrency($other);
 
-        return new self(
-            $this->amountMinor + $other->amountMinor,
-            $this->currency
-        );
+        return new self($this->amountMinor + $other->amountMinor, $this->currency);
     }
 
     public function subtract(self $other): self
@@ -41,19 +56,21 @@ final class Money
         $this->assertSameCurrency($other);
 
         if ($other->amountMinor > $this->amountMinor) {
-            throw new \LogicException('Insufficient funds.');
+            throw new InvalidMoneyOperationException('Result cannot be negative.');
         }
 
-        return new self(
-            $this->amountMinor - $other->amountMinor,
-            $this->currency
-        );
+        return new self($this->amountMinor - $other->amountMinor, $this->currency);
+    }
+
+    public function isPositive(): bool
+    {
+        return $this->amountMinor > 0;
     }
 
     private function assertSameCurrency(self $other): void
     {
         if ($this->currency !== $other->currency) {
-            throw new \LogicException('Currency mismatch.');
+            throw new CurrencyMismatchException(sprintf('Currency mismatch: %s vs %s.', $this->currency, $other->currency));
         }
     }
 }

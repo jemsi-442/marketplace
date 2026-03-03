@@ -1,4 +1,5 @@
 framework:
+    secret: '%env(APP_SECRET)%'
     rate_limiter:
         login:
             policy: 'sliding_window'

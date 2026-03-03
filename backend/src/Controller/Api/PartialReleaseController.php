@@ -7,7 +7,7 @@ use App\Service\PartialReleaseService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/api/partial-release')]
 class PartialReleaseController extends AbstractController

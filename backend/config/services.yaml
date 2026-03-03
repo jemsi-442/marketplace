@@ -1,6 +1,38 @@
 parameters:
     env(APP_ENV): 'dev'
     env(APP_SECRET): 'your_secret_here'
+    ai.trust.weights:
+        rating: 0.22
+        escrow_release_ratio: 0.23
+        on_time_delivery_ratio: 0.18
+        refund_ratio_inverse: 0.15
+        dispute_rate_inverse: 0.12
+        volume: 0.10
+    ai.trust.volume_cap_minor: 100000000
+    ai.trust.medium_risk_threshold: 70.0
+    ai.trust.high_risk_threshold: 45.0
+    ai.escrow_risk.high_amount_threshold_minor: 500000
+    ai.escrow_risk.first_client_large_amount_threshold_minor: 200000
+    ai.escrow_risk.vendor_dispute_rate_threshold: 0.25
+    ai.escrow_risk.manual_review_threshold: 72.0
+    ai.escrow_risk.weights:
+        client: 0.30
+        vendor: 0.30
+        amount: 0.25
+        geo: 0.15
+        anomaly_boost: 10
+    ai.escrow_risk.currency_factor:
+        TZS: 30
+        KES: 35
+        UGX: 40
+        USD: 55
+    ai.matching.weights:
+        trust_score: 0.40
+        relevance: 0.25
+        price_fit: 0.20
+        historical_similarity: 0.15
+    ai.metrics.high_risk_threshold: 70.0
+    ai.metrics.snapshot_stale_hours: 30
 
 services:
     _defaults:
@@ -30,3 +62,39 @@ services:
             $publicKeyPath: '%kernel.project_dir%/config/jwt/public.pem'
             $accessTtl: 3600
             $refreshTtl: 604800
+
+    App\Service\SnippeClient:
+        arguments:
+            $apiKey: '%env(SNIPPE_API_KEY)%'
+            $baseUrl: '%env(SNIPPE_BASE_URL)%'
+            $webhookSecret: '%env(SNIPPE_WEBHOOK_SECRET)%'
+
+    App\Service\VendorTrustCalculator:
+        arguments:
+            $weights: '%ai.trust.weights%'
+            $volumeCapMinor: '%ai.trust.volume_cap_minor%'
+            $mediumRiskThreshold: '%ai.trust.medium_risk_threshold%'
+            $highRiskThreshold: '%ai.trust.high_risk_threshold%'
+
+    App\Service\EscrowRiskEvaluator:
+        arguments:
+            $highAmountThresholdMinor: '%ai.escrow_risk.high_amount_threshold_minor%'
+            $firstClientLargeAmountThresholdMinor: '%ai.escrow_risk.first_client_large_amount_threshold_minor%'
+            $vendorDisputeRateThreshold: '%ai.escrow_risk.vendor_dispute_rate_threshold%'
+            $manualReviewThreshold: '%ai.escrow_risk.manual_review_threshold%'
+            $weights: '%ai.escrow_risk.weights%'
+            $currencyRiskMap: '%ai.escrow_risk.currency_factor%'
+
+    App\Service\PlatformMetricsSnapshotService:
+        arguments:
+            $highRiskEscrowThreshold: '%ai.metrics.high_risk_threshold%'
+
+    App\Service\PlatformMetricsHealthService:
+        arguments:
+            $staleThresholdHours: '%ai.metrics.snapshot_stale_hours%'
+
+    App\Service\Matching\RuleBasedMatchingStrategy:
+        arguments:
+            $weights: '%ai.matching.weights%'
+
+    App\Service\Matching\MatchingStrategyInterface: '@App\Service\Matching\RuleBasedMatchingStrategy'

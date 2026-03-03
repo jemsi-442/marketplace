@@ -1,12 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controller\Api;
 
-use App\Entity\Escrow;
-use App\Entity\Payment;
+use App\Repository\EscrowRepository;
+use App\Entity\User;
+use App\Service\EscrowService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -14,93 +18,54 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ADMIN')]
 class EscrowController extends AbstractController
 {
-    #[Route('/force-release/{escrowId}', methods: ['POST'])]
-    public function forceRelease(
-        int $escrowId,
-        EntityManagerInterface $em
-    ): JsonResponse {
-        $escrow = $em->getRepository(Escrow::class)->find($escrowId);
-
-        if (!$escrow) {
-            return $this->json(['error' => 'Escrow not found'], 404);
-        }
-
-        if ($escrow->getStatus() !== 'disputed') {
-            return $this->json([
-                'error' => 'Only disputed escrows can be force released'
-            ], 400);
-        }
-
-        $escrow->setStatus('released');
-        $escrow->setReleasedAt(new \DateTimeImmutable());
-        $escrow->setAdminDecision('force_release');
-
-        $booking = $escrow->getBooking();
-        $booking->setStatus('completed');
-
-        $em->flush();
-
-        return $this->json([
-            'message' => 'Escrow force-released to vendor by admin'
-        ]);
+    public function __construct(
+        private readonly EscrowRepository $escrowRepository,
+        private readonly EscrowService $escrowService,
+        private readonly EntityManagerInterface $em
+    ) {
     }
 
-    #[Route('/refund/{escrowId}', methods: ['POST'])]
-    public function refund(
-        int $escrowId,
-        EntityManagerInterface $em
-    ): JsonResponse {
-        $escrow = $em->getRepository(Escrow::class)->find($escrowId);
+    #[Route('/resolve/{escrowId}', methods: ['POST'])]
+    public function resolve(int $escrowId, Request $request): JsonResponse
+    {
+        $admin = $this->getUser();
+        if (!$admin instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
 
-        if (!$escrow) {
+        $escrow = $this->escrowRepository->find($escrowId);
+        if ($escrow === null) {
             return $this->json(['error' => 'Escrow not found'], 404);
         }
 
-        if ($escrow->getStatus() !== 'disputed') {
-            return $this->json([
-                'error' => 'Only disputed escrows can be refunded'
-            ], 400);
-        }
+        $payload = json_decode($request->getContent(), true) ?? [];
+        $releaseToVendor = (bool) ($payload['release_to_vendor'] ?? false);
 
-        $refund = new Payment();
-        $refund->setUser($escrow->getClient());
-        $refund->setAmount($escrow->getAmount());
-        $refund->setMethod('escrow_refund');
-        $refund->setStatus('success');
-        $refund->setCreatedAt(new \DateTimeImmutable());
+        $this->escrowService->resolveDispute(
+            escrow: $escrow,
+            admin: $admin,
+            releaseToVendor: $releaseToVendor,
+            metadata: $payload
+        );
 
-        $escrow->setStatus('refunded');
-        $escrow->setAdminDecision('refund');
-        $escrow->setResolvedAt(new \DateTimeImmutable());
-
-        $booking = $escrow->getBooking();
-        $booking->setStatus('cancelled');
-
-        $em->persist($refund);
-        $em->flush();
-
-        return $this->json([
-            'message' => 'Escrow refunded to client by admin'
-        ]);
+        return $this->json(['message' => 'Escrow dispute resolved']);
     }
 
     #[Route('/list', methods: ['GET'])]
-    public function listDisputed(EntityManagerInterface $em): JsonResponse
+    public function listDisputed(): JsonResponse
     {
-        $escrows = $em->getRepository(Escrow::class)->findBy([
-            'status' => 'disputed'
-        ]);
-
+        $escrows = $this->escrowRepository->findBy(['status' => 'DISPUTED']);
         $data = [];
 
         foreach ($escrows as $escrow) {
             $data[] = [
                 'id' => $escrow->getId(),
-                'amount' => $escrow->getAmount(),
+                'reference' => $escrow->getReference(),
+                'status' => $escrow->getStatus(),
+                'amount_minor' => $escrow->getAmountMinor(),
+                'currency' => $escrow->getCurrency(),
                 'client' => $escrow->getClient()->getEmail(),
-                'vendor' => $escrow->getVendor()->getUser()->getEmail(),
-                'reason' => $escrow->getDisputeReason(),
-                'created_at' => $escrow->getCreatedAt()?->format('Y-m-d H:i')
+                'vendor' => $escrow->getVendor()->getEmail(),
             ];
         }
 

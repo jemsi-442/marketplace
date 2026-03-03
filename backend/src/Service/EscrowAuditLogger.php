@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
 use App\Entity\Escrow;
@@ -9,24 +11,17 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class EscrowAuditLogger
 {
-    public function __construct(
-        private EntityManagerInterface $em
-    ) {}
+    public function __construct(private readonly EntityManagerInterface $em)
+    {
+    }
 
-    public function log(
-        Escrow $escrow,
-        string $action,
-        ?User $actor = null,
-        array $metadata = []
-    ): void {
-        $log = new EscrowAuditLog(
+    public function log(Escrow $escrow, string $action, ?User $actor = null, array $metadata = []): void
+    {
+        $this->em->persist(new EscrowAuditLog(
             escrow: $escrow,
-            action: $action,
+            action: strtoupper($action),
             actor: $actor,
             metadata: $metadata
-        );
-
-        $this->em->persist($log);
-        $this->em->flush();
+        ));
     }
 }

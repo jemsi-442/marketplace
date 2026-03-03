@@ -64,16 +64,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'string', length: 20)]
     private string $riskLevel = 'LOW';
 
-    #[ORM\Column(type: 'datetime', nullable: true)]
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeInterface $lastRiskUpdate = null;
 
     /* =========================
        TIMESTAMPS
     ========================= */
-    #[ORM\Column(type: 'datetime')]
+    #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeInterface $createdAt;
 
-    #[ORM\Column(type: 'datetime')]
+    #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeInterface $updatedAt;
 
     /* =========================

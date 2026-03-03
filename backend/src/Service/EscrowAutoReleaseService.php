@@ -1,15 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
-use Doctrine\ORM\EntityManagerInterface;
 use App\Entity\Escrow;
+use Doctrine\ORM\EntityManagerInterface;
 
 class EscrowAutoReleaseService
 {
-    public function __construct(
-        private EntityManagerInterface $em
-    ) {}
+    public function __construct(private readonly EntityManagerInterface $em)
+    {
+    }
 
     public function autoRelease(): int
     {
@@ -18,15 +20,17 @@ class EscrowAutoReleaseService
         $escrows = $this->em->getRepository(Escrow::class)
             ->createQueryBuilder('e')
             ->where('e.status = :status')
-            ->setParameter('status', 'pending')
+            ->setParameter('status', Escrow::STATUS_ACTIVE)
             ->getQuery()
             ->getResult();
 
         foreach ($escrows as $escrow) {
-            if ($escrow->isEligibleForAutoRelease()) {
-                $escrow->setStatus('released');
-                $released++;
+            if (!$escrow instanceof Escrow) {
+                continue;
             }
+
+            $escrow->transitionToReleased();
+            $released++;
         }
 
         $this->em->flush();

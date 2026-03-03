@@ -1,41 +1,30 @@
 <?php
 
-namespace App\Service;
+declare(strict_types=1);
 
-use App\Entity\Escrow;
-use App\Entity\PlatformRevenueLedger;
-use App\Entity\VendorWalletLedger;
-use Doctrine\ORM\EntityManagerInterface;
+namespace App\Service;
 
 class PlatformFeeService
 {
-    public function __construct(
-        private EntityManagerInterface $em
-    ) {}
-
-    public function applyPlatformFee(Escrow $escrow, float $feeRate = 0.10): void
+    public function __construct(private readonly int $feeBps = 1000)
     {
-        $gross = (float)$escrow->getAmount();
-        $feeAmount = round($gross * $feeRate, 2);
-        $vendorNet = $gross - $feeAmount;
+    }
 
-        // Credit Vendor Wallet
-        $vendorLedger = new VendorWalletLedger();
-        $vendorLedger->setVendor($escrow->getVendor());
-        $vendorLedger->setAmount($vendorNet);
-        $vendorLedger->setType('CREDIT');
-        $vendorLedger->setReference('ESCROW_RELEASE_' . $escrow->getId());
+    public function calculateEscrowFee(int $grossMinor): int
+    {
+        if ($grossMinor <= 0) {
+            throw new \InvalidArgumentException('Gross amount must be positive.');
+        }
 
-        // Credit Platform Revenue
-        $platformLedger = new PlatformRevenueLedger();
-        $platformLedger->setAmount($feeAmount);
-        $platformLedger->setType('FEE');
-        $platformLedger->setReference('ESCROW_RELEASE_' . $escrow->getId());
+        return (int) floor(($grossMinor * $this->feeBps) / 10000);
+    }
 
-        $this->em->persist($vendorLedger);
-        $this->em->persist($platformLedger);
+    public function calculateWithdrawalFee(int $amountMinor, int $feeBps = 250): int
+    {
+        if ($amountMinor <= 0) {
+            throw new \InvalidArgumentException('Withdrawal amount must be positive.');
+        }
 
-        $this->em->flush();
+        return (int) floor(($amountMinor * $feeBps) / 10000);
     }
 }
-

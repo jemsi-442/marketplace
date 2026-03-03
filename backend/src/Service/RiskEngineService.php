@@ -1,38 +1,40 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
-use App\Entity\User;
-use App\Entity\Booking;
 use App\Entity\FraudRisk;
+use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 
 class RiskEngineService
 {
-    public function __construct(private EntityManagerInterface $em) {}
+    public function __construct(private readonly EntityManagerInterface $em)
+    {
+    }
 
     public function analyzeUser(User $user): int
     {
         $score = 0;
         $reasons = [];
 
-        // Account age
-        $age = (new \DateTime())->diff($user->getCreatedAt())->days;
-        if ($age < 7) {
+        $createdAt = $user->getCreatedAt();
+        $ageDays = (new \DateTimeImmutable())->diff(\DateTimeImmutable::createFromInterface($createdAt))->days;
+
+        if ($ageDays < 7) {
             $score += 15;
-            $reasons[] = "New account";
+            $reasons[] = 'New account';
         }
 
-        // Too many disputes
-        if (count($user->getDisputes()) > 3) {
+        if ($user->getFailedLoginAttempts() >= 3) {
             $score += 20;
-            $reasons[] = "High dispute rate";
+            $reasons[] = 'Repeated failed logins';
         }
 
-        // Too many 5-star reviews in short time
-        if ($this->rapidFiveStarPattern($user)) {
-            $score += 20;
-            $reasons[] = "Review manipulation pattern";
+        if ($user->getTrustScore() < 60) {
+            $score += 25;
+            $reasons[] = 'Low trust score';
         }
 
         if ($score > 0) {
@@ -40,21 +42,6 @@ class RiskEngineService
         }
 
         return $score;
-    }
-
-    private function rapidFiveStarPattern(User $user): bool
-    {
-        $reviews = $user->getReviews();
-        $recent = 0;
-
-        foreach ($reviews as $review) {
-            if ($review->getRating() == 5 &&
-                $review->getCreatedAt() > (new \DateTime('-24 hours'))) {
-                $recent++;
-            }
-        }
-
-        return $recent >= 5;
     }
 
     private function logRisk(User $user, int $score, string $reason): void

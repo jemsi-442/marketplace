@@ -1,16 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
-use App\Entity\PartialRelease;
 use App\Entity\Escrow;
+use App\Entity\PartialRelease;
 use Doctrine\ORM\EntityManagerInterface;
 
 final class PartialReleaseService
 {
-    public function __construct(
-        private EntityManagerInterface $em
-    ) {}
+    public function __construct(private readonly EntityManagerInterface $em)
+    {
+    }
 
     public function release(PartialRelease $partialRelease): bool
     {
@@ -18,11 +20,7 @@ final class PartialReleaseService
             return false;
         }
 
-        if (!$partialRelease->canBeReleased()) {
-            throw new \LogicException('Milestone cannot be released.');
-        }
-
-        $partialRelease->markAsReleased();
+        $partialRelease->markReleased();
         $this->em->flush();
 
         return true;
@@ -33,8 +31,12 @@ final class PartialReleaseService
         $count = 0;
 
         foreach ($escrow->getPartialReleases() as $release) {
-            if (!$release->isReleased() && $release->canBeReleased()) {
-                $release->markAsReleased();
+            if (!$release instanceof PartialRelease) {
+                continue;
+            }
+
+            if (!$release->isReleased()) {
+                $release->markReleased();
                 $count++;
             }
         }

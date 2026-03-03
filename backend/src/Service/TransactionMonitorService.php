@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
 use App\Entity\Payment;
@@ -9,27 +11,28 @@ use Doctrine\ORM\EntityManagerInterface;
 class TransactionMonitorService
 {
     public function __construct(
-        private RiskEngineService $riskEngine,
-        private EntityManagerInterface $em
-    ) {}
+        private readonly RiskEngineService $riskEngine,
+        private readonly EntityManagerInterface $em
+    ) {
+    }
 
     public function monitorPayment(Payment $payment): void
     {
-        $user = $payment->getUser();
+        $user = $payment->getBooking()?->getClient();
+        if (!$user instanceof User) {
+            return;
+        }
 
         $riskScore = $this->riskEngine->analyzeUser($user);
 
-        // Velocity check
         if ($this->isHighVelocity($user)) {
             $riskScore += 30;
         }
 
-        // Large amount check
         if ($payment->getAmount() > 5000) {
             $riskScore += 20;
         }
 
-        // Decision engine
         $this->applyDecision($payment, $riskScore);
     }
 
@@ -37,7 +40,8 @@ class TransactionMonitorService
     {
         $recentPayments = $this->em->getRepository(Payment::class)
             ->createQueryBuilder('p')
-            ->where('p.user = :user')
+            ->join('p.booking', 'b')
+            ->where('b.client = :user')
             ->andWhere('p.createdAt > :time')
             ->setParameter('user', $user)
             ->setParameter('time', new \DateTime('-10 minutes'))
@@ -50,9 +54,9 @@ class TransactionMonitorService
     private function applyDecision(Payment $payment, int $riskScore): void
     {
         if ($riskScore >= 80) {
-            $payment->setStatus('FROZEN');
-        } elseif ($riskScore >= 60) {
-            $payment->setStatus('FLAGGED');
+            $payment->setStatus('failed');
+        } elseif ($riskScore >= 60 && $payment->getStatus() === 'completed') {
+            $payment->setStatus('pending');
         }
 
         $this->em->flush();

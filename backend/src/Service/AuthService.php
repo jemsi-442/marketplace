@@ -44,12 +44,12 @@ final class AuthService
 
     private function issueToken(User $user): array
     {
+        $tokens = $this->jwt->generateTokens($user);
+
         return [
-            'token' => $this->jwt->generate([
-                'id' => $user->getId(),
-                'email' => $user->getEmail(),
-                'roles' => $user->getRoles(),
-            ]),
+            'token' => $tokens['access_token'],
+            'refresh_token' => $tokens['refresh_token'],
+            'expires_in' => $tokens['expires_in'],
             'user' => [
                 'id' => $user->getId(),
                 'email' => $user->getEmail(),
