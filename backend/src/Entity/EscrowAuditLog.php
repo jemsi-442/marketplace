@@ -68,6 +68,7 @@ class EscrowAuditLog
         return $this->actor;
     }
 
+    
     public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;

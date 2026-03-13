@@ -131,6 +131,7 @@ class Escrow
         return $this->booking;
     }
 
+
     public function getPartialReleases(): Collection
     {
         return $this->partialReleases;

@@ -22,6 +22,7 @@ class FraudRisk
     #[ORM\ManyToOne(targetEntity: User::class)]
     private User $user;
 
+
     public function __construct(User $user, int $score, string $reason)
     {
         $this->user = $user;

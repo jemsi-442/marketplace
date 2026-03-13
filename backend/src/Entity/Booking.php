@@ -133,3 +133,4 @@ class Booking
         $this->updatedAt = new \DateTimeImmutable();
     }
 }
+
