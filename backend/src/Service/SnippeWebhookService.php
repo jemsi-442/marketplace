@@ -14,15 +14,44 @@ class SnippeWebhookService
     {
     }
 
-    public function recordIncoming(string $externalReference, string $eventType, array $payload, ?string $signature): bool
+    public function recordIncoming(
+        string $eventId,
+        string $externalReference,
+        string $eventType,
+        array $payload,
+        ?string $signature,
+        ?\DateTimeImmutable $sentAt = null
+    ): bool
     {
         try {
-            $this->em->persist(new SnippeWebhookEvent($externalReference, $eventType, $payload, $signature));
+            $this->em->persist(new SnippeWebhookEvent(
+                eventId: $eventId,
+                externalReference: $externalReference,
+                eventType: $eventType,
+                payload: $payload,
+                signature: $signature,
+                sentAt: $sentAt
+            ));
             $this->em->flush();
 
             return true;
         } catch (UniqueConstraintViolationException) {
             return false;
         }
+    }
+
+    public function markProcessed(string $eventId): void
+    {
+        if (method_exists($this->em, 'isOpen') && !$this->em->isOpen()) {
+            return;
+        }
+
+        $event = $this->em->getRepository(SnippeWebhookEvent::class)->findOneBy(['eventId' => $eventId]);
+        if (!$event instanceof SnippeWebhookEvent) {
+            return;
+        }
+
+        $event->markProcessed();
+        $this->em->flush();
     }
 }

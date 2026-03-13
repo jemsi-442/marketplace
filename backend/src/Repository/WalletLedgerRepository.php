@@ -38,4 +38,17 @@ class WalletLedgerRepository extends ServiceEntityRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    public function findOneByIdempotencyKey(string $idempotencyKey): ?WalletLedgerEntry
+    {
+        /** @var WalletLedgerEntry|null $entry */
+        $entry = $this->createQueryBuilder('l')
+            ->andWhere('l.idempotencyKey = :idempotencyKey')
+            ->setParameter('idempotencyKey', $idempotencyKey)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $entry;
+    }
 }

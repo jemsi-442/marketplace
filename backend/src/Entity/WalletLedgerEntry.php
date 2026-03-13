@@ -89,6 +89,46 @@ class WalletLedgerEntry
         return $this->reference;
     }
 
+    public function getAccount(): WalletAccount
+    {
+        return $this->account;
+    }
+
+    public function getCounterAccount(): ?WalletAccount
+    {
+        return $this->counterAccount;
+    }
+
+    public function getAmountMinor(): int
+    {
+        return $this->amountMinor;
+    }
+
+    public function getCurrency(): string
+    {
+        return $this->currency;
+    }
+
+    public function getEntryType(): string
+    {
+        return $this->entryType;
+    }
+
+    public function getIdempotencyKey(): ?string
+    {
+        return $this->idempotencyKey;
+    }
+
+    public function getMetadata(): ?array
+    {
+        return $this->metadata;
+    }
+
+    public function getCreatedAt(): \DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
     public function getSignedAmountMinor(): int
     {
         return $this->entryType === self::ENTRY_CREDIT ? $this->amountMinor : -$this->amountMinor;

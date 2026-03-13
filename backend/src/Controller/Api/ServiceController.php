@@ -3,6 +3,8 @@
 namespace App\Controller\Api;
 
 use App\Entity\Service;
+use App\Entity\User;
+use App\Entity\VendorProfile;
 use App\Repository\ServiceRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -19,7 +21,21 @@ class ServiceController extends AbstractController
     {
         $services = $repository->findBy(['isActive' => true]);
 
-        return $this->json($services);
+        $result = [];
+        foreach ($services as $service) {
+            $vendorUser = $service->getVendor()?->getUser();
+            $result[] = [
+                'id' => $service->getId(),
+                'title' => $service->getTitle(),
+                'description' => $service->getDescription(),
+                'category' => $service->getCategory(),
+                'price_cents' => $service->getPriceCents(),
+                'is_active' => $service->isActive(),
+                'vendor_user_id' => $vendorUser?->getId(),
+            ];
+        }
+
+        return $this->json($result);
     }
 
     #[Route('', methods: ['POST'])]
@@ -28,6 +44,16 @@ class ServiceController extends AbstractController
         Request $request,
         EntityManagerInterface $em
     ): JsonResponse {
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $vendorProfile = $user->getVendorProfile();
+        if (!$vendorProfile instanceof VendorProfile) {
+            return $this->json(['error' => 'Vendor profile required before creating services'], 422);
+        }
+
         $data = json_decode($request->getContent(), true);
 
         if (!isset($data['title'], $data['price'])) {
@@ -37,10 +63,9 @@ class ServiceController extends AbstractController
         $service = new Service();
         $service->setTitle($data['title']);
         $service->setDescription($data['description'] ?? null);
+        $service->setCategory($data['category'] ?? null);
         $service->setPrice((float)$data['price']);
-        $service->setVendor($this->getUser());
-        $service->setIsActive(true);
-        $service->setCreatedAt(new \DateTimeImmutable());
+        $service->setVendor($vendorProfile);
 
         $em->persist($service);
         $em->flush();
@@ -58,7 +83,17 @@ class ServiceController extends AbstractController
             return $this->json(['error' => 'Service not available'], 404);
         }
 
-        return $this->json($service);
+        $vendorUser = $service->getVendor()?->getUser();
+
+        return $this->json([
+            'id' => $service->getId(),
+            'title' => $service->getTitle(),
+            'description' => $service->getDescription(),
+            'category' => $service->getCategory(),
+            'price_cents' => $service->getPriceCents(),
+            'is_active' => $service->isActive(),
+            'vendor_user_id' => $vendorUser?->getId(),
+        ]);
     }
 
     #[Route('/{id}', methods: ['PUT'])]
@@ -68,7 +103,12 @@ class ServiceController extends AbstractController
         Request $request,
         EntityManagerInterface $em
     ): JsonResponse {
-        if ($service->getVendor() !== $this->getUser()) {
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
+
+        if ($service->getVendor()?->getUser()?->getId() !== $user->getId()) {
             return $this->json(['error' => 'Forbidden'], 403);
         }
 
@@ -86,6 +126,10 @@ class ServiceController extends AbstractController
             $service->setPrice((float)$data['price']);
         }
 
+        if (array_key_exists('category', $data)) {
+            $service->setCategory($data['category'] !== null ? (string) $data['category'] : null);
+        }
+
         $em->flush();
 
         return $this->json(['message' => 'Service updated']);
@@ -97,11 +141,16 @@ class ServiceController extends AbstractController
         Service $service,
         EntityManagerInterface $em
     ): JsonResponse {
-        if ($service->getVendor() !== $this->getUser()) {
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
+
+        if ($service->getVendor()?->getUser()?->getId() !== $user->getId()) {
             return $this->json(['error' => 'Forbidden'], 403);
         }
 
-        $service->setIsActive(false);
+        $service->deactivate();
         $em->flush();
 
         return $this->json(['message' => 'Service disabled']);

@@ -4,7 +4,7 @@ namespace App\Controller\Api;
 
 use App\Entity\Review;
 use App\Entity\Booking;
-use App\Entity\Service;
+use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,10 +20,30 @@ class ReviewController extends AbstractController
         int $vendorId,
         EntityManagerInterface $em
     ): JsonResponse {
-        $reviews = $em->getRepository(Review::class)
-            ->findBy(['vendor' => $vendorId], ['createdAt' => 'DESC']);
+        $reviews = $em->getRepository(Review::class)->createQueryBuilder('r')
+            ->join('r.booking', 'b')
+            ->join('b.service', 's')
+            ->join('s.vendor', 'vp')
+            ->join('vp.user', 'vu')
+            ->where('vu.id = :vendorId')
+            ->setParameter('vendorId', $vendorId)
+            ->orderBy('r.createdAt', 'DESC')
+            ->getQuery()
+            ->getResult();
 
-        return $this->json($reviews);
+        $result = [];
+        foreach ($reviews as $review) {
+            $booking = $review->getBooking();
+            $result[] = [
+                'id' => $review->getId(),
+                'booking_id' => $booking?->getId(),
+                'rating' => $review->getRating(),
+                'comment' => $review->getComment(),
+                'created_at' => $review->getCreatedAt()->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        return $this->json($result);
     }
 
     #[Route('', methods: ['POST'])]
@@ -33,6 +53,9 @@ class ReviewController extends AbstractController
         EntityManagerInterface $em
     ): JsonResponse {
         $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
         $data = json_decode($request->getContent(), true);
 
         if (
@@ -61,14 +84,14 @@ class ReviewController extends AbstractController
         }
 
         // 🔐 Booking ownership check
-        if ($booking->getClient() !== $user) {
+        if ($booking->getClient()?->getId() !== $user->getId()) {
             return $this->json([
                 'error' => 'You are not allowed to review this booking'
             ], 403);
         }
 
         // 🔐 Booking must be completed
-        if ($booking->getStatus() !== 'completed') {
+        if ($booking->getStatus() !== Booking::STATUS_COMPLETED) {
             return $this->json([
                 'error' => 'Booking not completed'
             ], 400);
@@ -85,22 +108,22 @@ class ReviewController extends AbstractController
             ], 409);
         }
 
-        $vendor = $booking->getVendor();
+        $vendorUser = $booking->getService()?->getVendor()?->getUser();
+        if (!$vendorUser instanceof User) {
+            return $this->json(['error' => 'Booking does not resolve to vendor'], 422);
+        }
 
         // ❌ Vendor cannot review self (extra safety)
-        if ($vendor->getUser() === $user) {
+        if ($vendorUser->getId() === $user->getId()) {
             return $this->json([
                 'error' => 'You cannot review yourself'
             ], 403);
         }
 
         $review = new Review();
-        $review->setClient($user);
-        $review->setVendor($vendor);
         $review->setBooking($booking);
         $review->setRating((int)$data['rating']);
         $review->setComment($data['comment'] ?? null);
-        $review->setCreatedAt(new \DateTimeImmutable());
 
         $em->persist($review);
         $em->flush();

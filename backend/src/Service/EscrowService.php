@@ -79,15 +79,33 @@ class EscrowService
 
         $idempotencyKey = 'collect_' . $escrow->getReference();
 
-        return $this->snippeClient->createCollection(
-            reference: $escrow->getReference(),
-            amountMinor: $escrow->getAmountMinor(),
-            currency: $escrow->getCurrency(),
-            msisdn: $msisdn,
-            provider: $provider,
-            callbackUrl: $callbackUrl,
-            idempotencyKey: $idempotencyKey
-        );
+        return $this->em->wrapInTransaction(function () use ($escrow, $msisdn, $provider, $callbackUrl, $idempotencyKey): array {
+            $this->em->lock($escrow, LockMode::PESSIMISTIC_WRITE);
+
+            $clientEmail = $escrow->getClient()->getEmail();
+            $localPart = explode('@', $clientEmail)[0] ?? 'Client';
+            $response = $this->snippeClient->createCollection(
+                reference: $escrow->getReference(),
+                amountMinor: $escrow->getAmountMinor(),
+                currency: $escrow->getCurrency(),
+                msisdn: $msisdn,
+                provider: $provider,
+                callbackUrl: $callbackUrl,
+                idempotencyKey: $idempotencyKey,
+                customerEmail: $clientEmail,
+                customerFirstName: ucfirst($localPart),
+                customerLastName: 'Client'
+            );
+
+            $snippeReference = (string) (($response['data']['reference'] ?? '') ?: '');
+            if ($snippeReference !== '') {
+                $escrow->setExternalPaymentReferenceForIntent($snippeReference, $response);
+            }
+
+            $this->em->flush();
+
+            return $response;
+        });
     }
 
     public function handleCollectionWebhook(array $payload): void
@@ -95,13 +113,15 @@ class EscrowService
         $reference = (string) ($payload['reference'] ?? '');
         $status = strtoupper((string) ($payload['status'] ?? ''));
         $externalTransactionId = (string) ($payload['transaction_id'] ?? ($payload['id'] ?? ''));
+        $gatewayReference = (string) ($payload['gateway_reference'] ?? $reference);
 
         if ($reference === '' || $status === '') {
             throw new \InvalidArgumentException('Collection webhook missing required fields.');
         }
 
-        $this->em->wrapInTransaction(function () use ($payload, $reference, $status, $externalTransactionId): void {
-            $escrow = $this->escrowRepository->findOneByReference($reference);
+        $this->em->wrapInTransaction(function () use ($payload, $reference, $status, $externalTransactionId, $gatewayReference): void {
+            $escrow = $this->escrowRepository->findOneByExternalPaymentReference($reference)
+                ?? $this->escrowRepository->findOneByReference($reference);
             if ($escrow === null) {
                 throw new \RuntimeException('Escrow reference not found.');
             }
@@ -131,11 +151,11 @@ class EscrowService
             }
 
             $escrow->transitionToFunded(
-                externalPaymentReference: $reference,
+                externalPaymentReference: $gatewayReference,
                 externalTransactionId: $externalTransactionId,
                 snapshot: $payload
             );
-            $this->vendorWalletService->recordEscrowFunding($escrow, 'escrow_funding_' . $reference);
+            $this->vendorWalletService->recordEscrowFunding($escrow, 'escrow_funding_' . $escrow->getReference());
             $escrow->transitionToActive();
 
             $this->auditLogger->log($escrow, 'ESCROW_FUNDED', null, [

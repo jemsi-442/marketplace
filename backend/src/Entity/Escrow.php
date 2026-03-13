@@ -216,6 +216,21 @@ class Escrow
         $this->updatedAt = $this->fundedAt;
     }
 
+    public function setExternalPaymentReferenceForIntent(string $externalPaymentReference, array $snapshot = []): void
+    {
+        if ($this->status !== self::STATUS_CREATED) {
+            throw new InvalidStateTransitionException('External payment reference can only be set while escrow is CREATED.');
+        }
+
+        if ($this->externalPaymentReference !== null && $this->externalPaymentReference !== $externalPaymentReference) {
+            throw new \RuntimeException('External payment reference already set to a different value.');
+        }
+
+        $this->externalPaymentReference = $externalPaymentReference;
+        $this->externalStatusSnapshot = $snapshot ?: $this->externalStatusSnapshot;
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+
     public function transitionToActive(): void
     {
         $this->assertTransition(self::STATUS_ACTIVE);

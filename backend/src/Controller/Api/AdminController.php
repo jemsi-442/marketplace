@@ -26,8 +26,8 @@ final class AdminController extends AbstractController
                 'id' => $user->getId(),
                 'email' => $user->getEmail(),
                 'roles' => $user->getRoles(),
-                'is_verified' => $user->getIsVerified(),
-                'is_locked' => $user->getIsLocked(),
+                'is_verified' => $user->isVerified(),
+                'is_locked' => $user->isLocked(),
             ];
         }
 
@@ -51,7 +51,7 @@ final class AdminController extends AbstractController
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
         $user->setIsLocked(false);
-        $user->setFailedLoginAttempts(0);
+        $user->resetFailedLoginAttempts();
         $em->flush();
 
         return $this->json(['message' => 'User account unlocked']);
@@ -68,8 +68,10 @@ final class AdminController extends AbstractController
         foreach ($vendors as $vendor) {
             $result[] = [
                 'id' => $vendor->getId(),
-                'name' => $vendor->getName(),
+                'company_name' => $vendor->getCompanyName(),
                 'bio' => $vendor->getBio(),
+                'website' => $vendor->getWebsite(),
+                'portfolio_link' => $vendor->getPortfolioLink(),
                 'user_id' => $vendor->getUser()?->getId(),
             ];
         }

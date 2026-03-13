@@ -19,4 +19,9 @@ class EscrowRepository extends ServiceEntityRepository
     {
         return $this->findOneBy(['reference' => $reference]);
     }
+
+    public function findOneByExternalPaymentReference(string $externalPaymentReference): ?Escrow
+    {
+        return $this->findOneBy(['externalPaymentReference' => $externalPaymentReference]);
+    }
 }

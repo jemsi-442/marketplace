@@ -1,15 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controller\Api;
 
 use App\Entity\Booking;
 use App\Entity\Service;
+use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
-
 
 #[Route('/api/bookings')]
 final class BookingController extends AbstractController
@@ -18,25 +20,36 @@ final class BookingController extends AbstractController
     public function list(EntityManagerInterface $em): JsonResponse
     {
         $user = $this->getUser();
-
-        $repo = $em->getRepository(Booking::class);
-
-        if (in_array('ROLE_CLIENT', $user->getRoles())) {
-            $bookings = $repo->findBy(['client' => $user]);
-        } else {
-            // Vendor/Admin sees all bookings
-            $bookings = $repo->findAll();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
         }
 
+        $qb = $em->getRepository(Booking::class)->createQueryBuilder('b')
+            ->leftJoin('b.service', 's')
+            ->leftJoin('s.vendor', 'vp')
+            ->leftJoin('vp.user', 'vu')
+            ->addSelect('s')
+            ->orderBy('b.createdAt', 'DESC');
+
+        if (in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+            // admin sees all
+        } elseif (in_array('ROLE_VENDOR', $user->getRoles(), true)) {
+            $qb->andWhere('vu = :user')->setParameter('user', $user);
+        } else {
+            $qb->andWhere('b.client = :user')->setParameter('user', $user);
+        }
+
+        $bookings = $qb->getQuery()->getResult();
+
         $result = [];
-        foreach ($bookings as $b) {
+        foreach ($bookings as $booking) {
             $result[] = [
-                'id' => $b->getId(),
-                'service_id' => $b->getService()?->getId(),
-                'service_title' => $b->getService()?->getTitle(),
-                'client_id' => $b->getClient()?->getId(),
-                'status' => $b->getStatus(),
-                'created_at' => $b->getCreatedAt()?->format('Y-m-d H:i:s'),
+                'id' => $booking->getId(),
+                'service_id' => $booking->getService()?->getId(),
+                'service_title' => $booking->getService()?->getTitle(),
+                'client_id' => $booking->getClient()?->getId(),
+                'status' => $booking->getStatus(),
+                'created_at' => $booking->getCreatedAt()->format('Y-m-d H:i:s'),
             ];
         }
 
@@ -47,9 +60,16 @@ final class BookingController extends AbstractController
     public function show(Booking $booking): JsonResponse
     {
         $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
 
-        if (in_array('ROLE_CLIENT', $user->getRoles()) && $booking->getClient() !== $user) {
-            return $this->json(['error' => 'Access denied'], 403);
+        if (!in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+            $isOwner = $booking->getClient()?->getId() === $user->getId();
+            $isVendor = $booking->getService()?->getVendor()?->getUser()?->getId() === $user->getId();
+            if (!$isOwner && !$isVendor) {
+                return $this->json(['error' => 'Access denied'], 403);
+            }
         }
 
         return $this->json([
@@ -58,32 +78,33 @@ final class BookingController extends AbstractController
             'service_title' => $booking->getService()?->getTitle(),
             'client_id' => $booking->getClient()?->getId(),
             'status' => $booking->getStatus(),
-            'created_at' => $booking->getCreatedAt()?->format('Y-m-d H:i:s'),
+            'created_at' => $booking->getCreatedAt()->format('Y-m-d H:i:s'),
         ]);
     }
 
     #[Route('', name: 'booking_create', methods: ['POST'])]
     public function create(Request $request, EntityManagerInterface $em): JsonResponse
     {
-        $this->denyAccessUnlessGranted('ROLE_CLIENT');
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
 
-        $data = json_decode($request->getContent(), true);
+        $data = json_decode($request->getContent(), true) ?? [];
         $serviceId = $data['service_id'] ?? null;
-
         if (!$serviceId) {
             return $this->json(['error' => 'service_id is required'], 400);
         }
 
         $service = $em->getRepository(Service::class)->find($serviceId);
-        if (!$service) {
+        if (!$service instanceof Service || !$service->isActive()) {
             return $this->json(['error' => 'Service not found'], 404);
         }
 
         $booking = new Booking();
         $booking->setService($service);
-        $booking->setClient($this->getUser());
-        $booking->setStatus('PENDING');
-        $booking->setCreatedAt(new \DateTimeImmutable());
+        $booking->setClient($user);
+        $booking->setStatus(Booking::STATUS_PENDING);
 
         $em->persist($booking);
         $em->flush();
@@ -91,6 +112,7 @@ final class BookingController extends AbstractController
         return $this->json([
             'message' => 'Booking created successfully',
             'booking_id' => $booking->getId(),
+            'status' => $booking->getStatus(),
         ], 201);
     }
 
@@ -98,16 +120,29 @@ final class BookingController extends AbstractController
     public function update(Booking $booking, Request $request, EntityManagerInterface $em): JsonResponse
     {
         $user = $this->getUser();
-
-        if (in_array('ROLE_CLIENT', $user->getRoles()) && $booking->getClient() !== $user) {
-            return $this->json(['error' => 'Access denied'], 403);
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
         }
 
-        $data = json_decode($request->getContent(), true);
-        $status = strtoupper($data['status'] ?? $booking->getStatus());
+        if (!in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+            $isOwner = $booking->getClient()?->getId() === $user->getId();
+            $isVendor = $booking->getService()?->getVendor()?->getUser()?->getId() === $user->getId();
+            if (!$isOwner && !$isVendor) {
+                return $this->json(['error' => 'Access denied'], 403);
+            }
+        }
 
-        $validStatuses = ['PENDING', 'COMPLETED', 'CANCELLED'];
-        if (!in_array($status, $validStatuses)) {
+        $data = json_decode($request->getContent(), true) ?? [];
+        $statusInput = (string) ($data['status'] ?? $booking->getStatus());
+        $status = strtolower($statusInput);
+
+        $validStatuses = [
+            Booking::STATUS_PENDING,
+            Booking::STATUS_CONFIRMED,
+            Booking::STATUS_COMPLETED,
+            Booking::STATUS_CANCELLED,
+        ];
+        if (!in_array($status, $validStatuses, true)) {
             return $this->json(['error' => 'Invalid status'], 400);
         }
 
@@ -117,6 +152,7 @@ final class BookingController extends AbstractController
         return $this->json([
             'message' => 'Booking updated successfully',
             'booking_id' => $booking->getId(),
+            'status' => $booking->getStatus(),
         ]);
     }
 
@@ -124,9 +160,15 @@ final class BookingController extends AbstractController
     public function delete(Booking $booking, EntityManagerInterface $em): JsonResponse
     {
         $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
 
-        if (in_array('ROLE_CLIENT', $user->getRoles()) && $booking->getClient() !== $user) {
-            return $this->json(['error' => 'Access denied'], 403);
+        if (!in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+            $isOwner = $booking->getClient()?->getId() === $user->getId();
+            if (!$isOwner) {
+                return $this->json(['error' => 'Access denied'], 403);
+            }
         }
 
         $em->remove($booking);
@@ -135,3 +177,4 @@ final class BookingController extends AbstractController
         return $this->json(['message' => 'Booking deleted successfully']);
     }
 }
+

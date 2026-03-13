@@ -24,18 +24,32 @@ class SnippeClient
         string $msisdn,
         string $provider,
         string $callbackUrl,
-        string $idempotencyKey
+        string $idempotencyKey,
+        ?string $customerEmail = null,
+        ?string $customerFirstName = null,
+        ?string $customerLastName = null,
+        array $metadata = []
     ): array {
         $payload = [
-            'reference' => $reference,
-            'amount_minor' => $amountMinor,
-            'currency' => strtoupper($currency),
-            'msisdn' => $msisdn,
-            'provider' => strtoupper($provider),
-            'callback_url' => $callbackUrl,
+            'payment_type' => 'mobile',
+            'details' => [
+                'amount' => $amountMinor,
+                'currency' => strtoupper($currency),
+            ],
+            'phone_number' => $msisdn,
+            'customer' => [
+                'firstname' => $customerFirstName ?: 'Client',
+                'lastname' => $customerLastName ?: 'User',
+                'email' => $customerEmail ?: 'unknown@example.com',
+            ],
+            'webhook_url' => $callbackUrl,
+            'metadata' => array_merge([
+                'order_id' => $reference,
+                'provider_hint' => strtoupper($provider),
+            ], $metadata),
         ];
 
-        return $this->request('POST', '/collections', $payload, $idempotencyKey, 'COLLECTION_CREATE', $reference);
+        return $this->request('POST', '/v1/payments', $payload, $idempotencyKey, 'PAYMENT_CREATE', $reference);
     }
 
     public function createPayout(
@@ -45,18 +59,24 @@ class SnippeClient
         string $msisdn,
         string $provider,
         string $callbackUrl,
-        string $idempotencyKey
+        string $idempotencyKey,
+        ?string $recipientName = null,
+        array $metadata = []
     ): array {
         $payload = [
-            'reference' => $reference,
-            'amount_minor' => $amountMinor,
-            'currency' => strtoupper($currency),
-            'msisdn' => $msisdn,
-            'provider' => strtoupper($provider),
-            'callback_url' => $callbackUrl,
+            'amount' => $amountMinor,
+            'channel' => 'mobile',
+            'recipient_phone' => $msisdn,
+            'recipient_name' => $recipientName ?: 'Vendor',
+            'narration' => sprintf('Marketplace withdrawal %s', $reference),
+            'webhook_url' => $callbackUrl,
+            'metadata' => array_merge([
+                'order_id' => $reference,
+                'provider_hint' => strtoupper($provider),
+            ], $metadata),
         ];
 
-        return $this->request('POST', '/payouts', $payload, $idempotencyKey, 'PAYOUT_CREATE', $reference);
+        return $this->request('POST', '/v1/payouts/send', $payload, $idempotencyKey, 'PAYOUT_SEND', $reference);
     }
 
     public function verifyWebhookSignature(string $rawBody, ?string $signature): bool
@@ -82,7 +102,12 @@ class SnippeClient
         string $operation,
         string $reference
     ): array {
-        $url = rtrim($this->baseUrl, '/') . $endpoint;
+        $endpoint = '/' . ltrim($endpoint, '/');
+        $base = rtrim($this->baseUrl, '/');
+        if (str_ends_with($base, '/v1') && str_starts_with($endpoint, '/v1/')) {
+            $endpoint = substr($endpoint, 3);
+        }
+        $url = $base . $endpoint;
         $body = json_encode($payload, JSON_THROW_ON_ERROR);
 
         $ch = curl_init($url);
@@ -93,6 +118,7 @@ class SnippeClient
                 'Content-Type: application/json',
                 'Accept: application/json',
                 'Authorization: Bearer ' . $this->apiKey,
+                'Idempotency-Key: ' . $idempotencyKey,
                 'X-Idempotency-Key: ' . $idempotencyKey,
             ],
             CURLOPT_POSTFIELDS => $body,

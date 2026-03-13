@@ -28,12 +28,16 @@ http_status() {
   local url="$2"
   local body="$3"
   local sig="$4"
-  local out_file="$5"
+  local ts="$5"
+  local event="$6"
+  local out_file="$7"
 
   curl -s -o "$out_file" -w '%{http_code}' \
     -X "$method" "$url" \
     -H 'Content-Type: application/json' \
-    -H "X-Snippe-Signature: $sig" \
+    -H "X-Webhook-Signature: $sig" \
+    -H "X-Webhook-Timestamp: $ts" \
+    -H "X-Webhook-Event: $event" \
     -d "$body"
 }
 
@@ -78,18 +82,21 @@ fi
 
 echo "[3/6] Inserting CREATED escrow fixture"
 ESCROW_REF="escrow_signed_test_${TS}"
+PAY_REF="payref_${TS}"
 "${MYSQL[@]}" <<SQL
-INSERT INTO escrow (amount_minor,currency,status,created_at,client_id,vendor_id,reference,updated_at)
-VALUES (12000,'TZS','CREATED',NOW(),${USER_ID},${USER_ID},'${ESCROW_REF}',NOW());
+INSERT INTO escrow (amount_minor,currency,status,created_at,client_id,vendor_id,reference,external_payment_reference,updated_at)
+VALUES (12000,'TZS','CREATED',NOW(),${USER_ID},${USER_ID},'${ESCROW_REF}','${PAY_REF}',NOW());
 SQL
 
 echo "[4/6] Testing signed collection webhook (first + duplicate replay)"
 COLL_TXN="txn_${TS}"
-COLL_BODY=$(printf '{"reference":"%s","status":"SUCCESS","transaction_id":"%s"}' "$ESCROW_REF" "$COLL_TXN")
+COLL_EVENT_ID="evt_coll_${TS}"
+COLL_BODY=$(printf '{"id":"%s","type":"payment.completed","created_at":"%s","data":{"reference":"%s","status":"success","external_reference":"%s","metadata":{"order_id":"%s"}}}' "$COLL_EVENT_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$PAY_REF" "$COLL_TXN" "$ESCROW_REF")
 COLL_SIG="$(sign_body "$COLL_BODY")"
+WEBHOOK_TS="$TS"
 
-COLL_CODE_1=$(http_status POST "$BASE_URL/webhooks/snippe/collection" "$COLL_BODY" "$COLL_SIG" /tmp/snippe_coll_1.json)
-COLL_CODE_2=$(http_status POST "$BASE_URL/webhooks/snippe/collection" "$COLL_BODY" "$COLL_SIG" /tmp/snippe_coll_2.json)
+COLL_CODE_1=$(http_status POST "$BASE_URL/webhooks/snippe/collection" "$COLL_BODY" "$COLL_SIG" "$WEBHOOK_TS" "payment.completed" /tmp/snippe_coll_1.json)
+COLL_CODE_2=$(http_status POST "$BASE_URL/webhooks/snippe/collection" "$COLL_BODY" "$COLL_SIG" "$WEBHOOK_TS" "payment.completed" /tmp/snippe_coll_2.json)
 
 [[ "$COLL_CODE_1" == "202" ]] || { echo "Expected first collection webhook status 202, got $COLL_CODE_1"; cat /tmp/snippe_coll_1.json; exit 1; }
 [[ "$COLL_CODE_2" == "202" ]] || { echo "Expected duplicate collection webhook status 202, got $COLL_CODE_2"; cat /tmp/snippe_coll_2.json; exit 1; }
@@ -99,7 +106,7 @@ assert_contains /tmp/snippe_coll_2.json 'Duplicate webhook ignored'
 echo "[5/6] Verifying DB side effects for collection webhook"
 ESCROW_STATUS=$("${MYSQL[@]}" -e "SELECT status FROM escrow WHERE reference='${ESCROW_REF}' LIMIT 1;")
 ESCROW_TXN=$("${MYSQL[@]}" -e "SELECT external_transaction_id FROM escrow WHERE reference='${ESCROW_REF}' LIMIT 1;")
-WEBHOOK_COUNT=$("${MYSQL[@]}" -e "SELECT COUNT(*) FROM snippe_webhook_event WHERE external_reference='${ESCROW_REF}';")
+WEBHOOK_COUNT=$("${MYSQL[@]}" -e "SELECT COUNT(*) FROM snippe_webhook_event WHERE event_id='${COLL_EVENT_ID}';")
 LEDGER_COUNT=$("${MYSQL[@]}" -e "SELECT COUNT(*) FROM wallet_ledger_entry WHERE reference='${ESCROW_REF}';")
 
 [[ "$ESCROW_STATUS" == "ACTIVE" ]] || { echo "Expected escrow status ACTIVE, got '$ESCROW_STATUS'"; exit 1; }
@@ -110,11 +117,12 @@ LEDGER_COUNT=$("${MYSQL[@]}" -e "SELECT COUNT(*) FROM wallet_ledger_entry WHERE 
 echo "[6/6] Testing signed payout webhook for unknown reference (recorded/not-applied + duplicate)"
 PAYOUT_REF="payout_signed_test_${TS}"
 PAYOUT_TXN="txp_${TS}"
-PAYOUT_BODY=$(printf '{"reference":"%s","status":"SUCCESS","transaction_id":"%s"}' "$PAYOUT_REF" "$PAYOUT_TXN")
+PAYOUT_EVENT_ID="evt_payout_${TS}"
+PAYOUT_BODY=$(printf '{"id":"%s","type":"payout.completed","created_at":"%s","data":{"reference":"%s","status":"success","external_reference":"%s","metadata":{"order_id":"%s"}}}' "$PAYOUT_EVENT_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$PAYOUT_REF" "$PAYOUT_TXN" "$PAYOUT_REF")
 PAYOUT_SIG="$(sign_body "$PAYOUT_BODY")"
 
-PAYOUT_CODE_1=$(http_status POST "$BASE_URL/webhooks/snippe/payout" "$PAYOUT_BODY" "$PAYOUT_SIG" /tmp/snippe_pay_1.json)
-PAYOUT_CODE_2=$(http_status POST "$BASE_URL/webhooks/snippe/payout" "$PAYOUT_BODY" "$PAYOUT_SIG" /tmp/snippe_pay_2.json)
+PAYOUT_CODE_1=$(http_status POST "$BASE_URL/webhooks/snippe/payout" "$PAYOUT_BODY" "$PAYOUT_SIG" "$WEBHOOK_TS" "payout.completed" /tmp/snippe_pay_1.json)
+PAYOUT_CODE_2=$(http_status POST "$BASE_URL/webhooks/snippe/payout" "$PAYOUT_BODY" "$PAYOUT_SIG" "$WEBHOOK_TS" "payout.completed" /tmp/snippe_pay_2.json)
 
 [[ "$PAYOUT_CODE_1" == "202" ]] || { echo "Expected first payout webhook status 202, got $PAYOUT_CODE_1"; cat /tmp/snippe_pay_1.json; exit 1; }
 [[ "$PAYOUT_CODE_2" == "202" ]] || { echo "Expected duplicate payout webhook status 202, got $PAYOUT_CODE_2"; cat /tmp/snippe_pay_2.json; exit 1; }

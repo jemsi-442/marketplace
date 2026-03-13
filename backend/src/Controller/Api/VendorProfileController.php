@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\User;
 use App\Entity\VendorProfile;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -18,6 +19,9 @@ class VendorProfileController extends AbstractController
     public function view(): JsonResponse
     {
         $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
         $profile = $user->getVendorProfile();
 
         if (!$profile) {
@@ -27,7 +31,15 @@ class VendorProfileController extends AbstractController
             ]);
         }
 
-        return $this->json($profile);
+        return $this->json([
+            'exists' => true,
+            'id' => $profile->getId(),
+            'company_name' => $profile->getCompanyName(),
+            'bio' => $profile->getBio(),
+            'website' => $profile->getWebsite(),
+            'portfolio_link' => $profile->getPortfolioLink(),
+            'user_id' => $user->getId(),
+        ]);
     }
 
     #[Route('', methods: ['POST'])]
@@ -36,6 +48,9 @@ class VendorProfileController extends AbstractController
         EntityManagerInterface $em
     ): JsonResponse {
         $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
 
         if ($user->getVendorProfile()) {
             return $this->json([
@@ -45,25 +60,25 @@ class VendorProfileController extends AbstractController
 
         $data = json_decode($request->getContent(), true);
 
-        if (!isset($data['businessName'])) {
+        if (!isset($data['companyName'])) {
             return $this->json([
-                'error' => 'businessName is required'
+                'error' => 'companyName is required'
             ], 400);
         }
 
         $profile = new VendorProfile();
         $profile->setUser($user);
-        $profile->setBusinessName($data['businessName']);
-        $profile->setDescription($data['description'] ?? null);
-        $profile->setLocation($data['location'] ?? null);
-        $profile->setVerified(false);
-        $profile->setCreatedAt(new \DateTimeImmutable());
+        $profile->setCompanyName((string) $data['companyName']);
+        $profile->setBio(isset($data['bio']) ? (string) $data['bio'] : null);
+        $profile->setWebsite(isset($data['website']) ? (string) $data['website'] : null);
+        $profile->setPortfolioLink(isset($data['portfolioLink']) ? (string) $data['portfolioLink'] : null);
 
         $em->persist($profile);
         $em->flush();
 
         return $this->json([
-            'message' => 'Vendor profile created'
+            'message' => 'Vendor profile created',
+            'id' => $profile->getId(),
         ], 201);
     }
 
@@ -73,6 +88,9 @@ class VendorProfileController extends AbstractController
         EntityManagerInterface $em
     ): JsonResponse {
         $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
         $profile = $user->getVendorProfile();
 
         if (!$profile) {
@@ -83,16 +101,20 @@ class VendorProfileController extends AbstractController
 
         $data = json_decode($request->getContent(), true);
 
-        if (isset($data['businessName'])) {
-            $profile->setBusinessName($data['businessName']);
+        if (isset($data['companyName'])) {
+            $profile->setCompanyName((string) $data['companyName']);
         }
 
-        if (isset($data['description'])) {
-            $profile->setDescription($data['description']);
+        if (array_key_exists('bio', $data)) {
+            $profile->setBio($data['bio'] !== null ? (string) $data['bio'] : null);
         }
 
-        if (isset($data['location'])) {
-            $profile->setLocation($data['location']);
+        if (array_key_exists('website', $data)) {
+            $profile->setWebsite($data['website'] !== null ? (string) $data['website'] : null);
+        }
+
+        if (array_key_exists('portfolioLink', $data)) {
+            $profile->setPortfolioLink($data['portfolioLink'] !== null ? (string) $data['portfolioLink'] : null);
         }
 
         $em->flush();

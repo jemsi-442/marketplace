@@ -7,8 +7,7 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Repository\EscrowRepository;
 use App\Service\EscrowService;
-use App\Service\SnippeClient;
-use App\Service\SnippeWebhookService;
+use App\Service\SnippeWebhookProcessor;
 use App\Service\WithdrawalService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -21,9 +20,8 @@ class PaymentController extends AbstractController
     public function __construct(
         private readonly EscrowService $escrowService,
         private readonly WithdrawalService $withdrawalService,
-        private readonly SnippeClient $snippeClient,
-        private readonly SnippeWebhookService $webhookService,
-        private readonly EscrowRepository $escrowRepository
+        private readonly EscrowRepository $escrowRepository,
+        private readonly SnippeWebhookProcessor $webhookProcessor
     ) {
     }
 
@@ -65,74 +63,14 @@ class PaymentController extends AbstractController
     #[Route('/webhooks/collection', name: 'snippe_collection_webhook', methods: ['POST'])]
     public function collectionWebhook(Request $request): JsonResponse
     {
-        $rawBody = $request->getContent();
-        $signature = $request->headers->get('X-Snippe-Signature');
-
-        if (!$this->snippeClient->verifyWebhookSignature($rawBody, $signature)) {
-            return $this->json(['error' => 'Invalid or missing webhook signature'], 401);
-        }
-
-        $payload = json_decode($rawBody, true);
-        if (!is_array($payload)) {
-            return $this->json(['error' => 'Invalid JSON payload'], 400);
-        }
-
-        $reference = (string) ($payload['reference'] ?? '');
-        if ($reference === '') {
-            return $this->json(['error' => 'Missing webhook reference'], 400);
-        }
-
-        $isNewEvent = $this->webhookService->recordIncoming($reference, 'COLLECTION', $payload, $signature);
-        if (!$isNewEvent) {
-            return $this->json(['message' => 'Duplicate webhook ignored'], 202);
-        }
-
-        try {
-            $this->escrowService->handleCollectionWebhook($payload);
-        } catch (\RuntimeException $e) {
-            return $this->json([
-                'message' => 'Webhook recorded but not applied',
-                'reason' => $e->getMessage(),
-            ], 202);
-        }
-
-        return $this->json(['message' => 'Webhook processed'], 202);
+        $result = $this->webhookProcessor->processCollection($request->getContent(), $request->headers->all());
+        return $this->json($result['body'], $result['status']);
     }
 
     #[Route('/webhooks/payout', name: 'snippe_payout_webhook', methods: ['POST'])]
     public function payoutWebhook(Request $request): JsonResponse
     {
-        $rawBody = $request->getContent();
-        $signature = $request->headers->get('X-Snippe-Signature');
-
-        if (!$this->snippeClient->verifyWebhookSignature($rawBody, $signature)) {
-            return $this->json(['error' => 'Invalid or missing webhook signature'], 401);
-        }
-
-        $payload = json_decode($rawBody, true);
-        if (!is_array($payload)) {
-            return $this->json(['error' => 'Invalid JSON payload'], 400);
-        }
-
-        $reference = (string) ($payload['reference'] ?? '');
-        if ($reference === '') {
-            return $this->json(['error' => 'Missing webhook reference'], 400);
-        }
-
-        $isNewEvent = $this->webhookService->recordIncoming($reference, 'PAYOUT', $payload, $signature);
-        if (!$isNewEvent) {
-            return $this->json(['message' => 'Duplicate webhook ignored'], 202);
-        }
-
-        try {
-            $this->withdrawalService->handlePayoutWebhook($payload);
-        } catch (\RuntimeException $e) {
-            return $this->json([
-                'message' => 'Webhook recorded but not applied',
-                'reason' => $e->getMessage(),
-            ], 202);
-        }
-
-        return $this->json(['message' => 'Webhook processed'], 202);
+        $result = $this->webhookProcessor->processPayout($request->getContent(), $request->headers->all());
+        return $this->json($result['body'], $result['status']);
     }
 }

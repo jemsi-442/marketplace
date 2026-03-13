@@ -33,6 +33,7 @@ parameters:
         historical_similarity: 0.15
     ai.metrics.high_risk_threshold: 70.0
     ai.metrics.snapshot_stale_hours: 30
+    snippe.webhook.max_skew_seconds: 300
 
 services:
     _defaults:
@@ -68,6 +69,10 @@ services:
             $apiKey: '%env(SNIPPE_API_KEY)%'
             $baseUrl: '%env(SNIPPE_BASE_URL)%'
             $webhookSecret: '%env(SNIPPE_WEBHOOK_SECRET)%'
+
+    App\Service\SnippeWebhookValidator:
+        arguments:
+            $maxSkewSeconds: '%snippe.webhook.max_skew_seconds%'
 
     App\Service\VendorTrustCalculator:
         arguments:

@@ -80,24 +80,27 @@ class WithdrawalService
             $this->em->flush();
         });
 
-        $payoutReference = 'payout_' . $withdrawal->getReference();
+        $fallbackPayoutReference = 'payout_' . $withdrawal->getReference();
 
         try {
             $response = $this->snippeClient->createPayout(
-                reference: $payoutReference,
+                reference: $withdrawal->getReference(),
                 amountMinor: $withdrawal->getAmountMinor(),
                 currency: $withdrawal->getCurrency(),
                 msisdn: $withdrawal->getDestinationMsisdn(),
                 provider: $withdrawal->getProvider(),
                 callbackUrl: $callbackUrl,
-                idempotencyKey: 'payout_create_' . $withdrawal->getReference()
+                idempotencyKey: 'payout_send_' . $withdrawal->getReference(),
+                recipientName: sprintf('Vendor %d', $withdrawal->getVendor()->getId())
             );
 
-            $this->em->wrapInTransaction(function () use ($withdrawal, $payoutReference, $response): void {
+            $snippePayoutReference = (string) (($response['data']['reference'] ?? '') ?: $fallbackPayoutReference);
+
+            $this->em->wrapInTransaction(function () use ($withdrawal, $snippePayoutReference, $response): void {
                 $this->em->lock($withdrawal, LockMode::PESSIMISTIC_WRITE);
 
                 if ($withdrawal->getStatus() === WithdrawalRequest::STATUS_APPROVED) {
-                    $withdrawal->markProcessing($payoutReference, $response);
+                    $withdrawal->markProcessing($snippePayoutReference, $response);
                     $this->em->flush();
                 }
             });
