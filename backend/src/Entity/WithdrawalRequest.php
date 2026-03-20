@@ -144,6 +144,36 @@ class WithdrawalRequest
         return $this->provider;
     }
 
+    public function getExternalStatusSnapshot(): ?array
+    {
+        return $this->externalStatusSnapshot;
+    }
+
+    public function getFailureReason(): ?string
+    {
+        return $this->failureReason;
+    }
+
+    public function getCreatedAt(): \DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
+    public function getApprovedAt(): ?\DateTimeImmutable
+    {
+        return $this->approvedAt;
+    }
+
+    public function getProcessingAt(): ?\DateTimeImmutable
+    {
+        return $this->processingAt;
+    }
+
+    public function getCompletedAt(): ?\DateTimeImmutable
+    {
+        return $this->completedAt;
+    }
+
     public function approve(int $feeMinor): void
     {
         $this->assertStatus(self::STATUS_REQUESTED);

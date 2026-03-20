@@ -17,6 +17,7 @@ class EscrowAutoReleaseService
     {
         $released = 0;
 
+        /** @var array<int, Escrow> $escrows */
         $escrows = $this->em->getRepository(Escrow::class)
             ->createQueryBuilder('e')
             ->where('e.status = :status')
@@ -25,10 +26,6 @@ class EscrowAutoReleaseService
             ->getResult();
 
         foreach ($escrows as $escrow) {
-            if (!$escrow instanceof Escrow) {
-                continue;
-            }
-
             $escrow->transitionToReleased();
             $released++;
         }

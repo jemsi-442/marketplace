@@ -23,6 +23,7 @@ class VendorWalletService
     public const ESCROW_LIABILITY_CODE = 'ESCROW_LIABILITY';
     public const WITHDRAWAL_CLEARING_CODE = 'WITHDRAWAL_CLEARING';
     public const SNIPPE_SETTLEMENT_CODE = 'SNIPPE_SETTLEMENT';
+    public const LEGACY_ADJUSTMENT_CODE = 'LEGACY_ADJUSTMENT';
 
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -85,6 +86,21 @@ class VendorWalletService
                 metadata: ['movement' => 'ESCROW_RELEASE_PLATFORM_FEE', 'escrow_reference' => $escrow->getReference()]
             );
         }
+    }
+
+    public function refundEscrowExternally(Escrow $escrow, string $idempotencyKey): void
+    {
+        $currency = $escrow->getCurrency();
+
+        $this->postDoubleEntry(
+            debitAccountProvider: fn (): WalletAccount => $this->requireSystemAccount(WalletAccount::TYPE_ESCROW_LIABILITY, self::ESCROW_LIABILITY_CODE, $currency),
+            creditAccountProvider: fn (): WalletAccount => $this->requireSystemAccount(WalletAccount::TYPE_SNIPPE_SETTLEMENT, self::SNIPPE_SETTLEMENT_CODE, $currency),
+            amountMinor: $escrow->getAmountMinor(),
+            currency: $currency,
+            reference: $escrow->getReference(),
+            idempotencyKey: $idempotencyKey,
+            metadata: ['movement' => 'ESCROW_REFUND_EXTERNAL', 'escrow_reference' => $escrow->getReference()]
+        );
     }
 
     public function reserveForWithdrawal(WithdrawalRequest $withdrawal, string $idempotencyPrefix): void
@@ -156,6 +172,54 @@ class VendorWalletService
         }
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    public function manualCreditVendor(
+        User $vendor,
+        int $amountMinor,
+        string $currency,
+        string $reference,
+        string $idempotencyKey,
+        array $metadata = []
+    ): void {
+        $this->postDoubleEntry(
+            debitAccountProvider: fn (): WalletAccount => $this->requireSystemAccount(WalletAccount::TYPE_LEGACY_ADJUSTMENT, self::LEGACY_ADJUSTMENT_CODE, $currency),
+            creditAccountProvider: fn (): WalletAccount => $this->requireVendorAccount($vendor, $currency),
+            amountMinor: $amountMinor,
+            currency: $currency,
+            reference: $reference,
+            idempotencyKey: $idempotencyKey,
+            metadata: array_merge([
+                'movement' => 'LEGACY_WALLET_MANUAL_CREDIT',
+            ], $metadata)
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    public function manualDebitVendor(
+        User $vendor,
+        int $amountMinor,
+        string $currency,
+        string $reference,
+        string $idempotencyKey,
+        array $metadata = []
+    ): void {
+        $this->postDoubleEntry(
+            debitAccountProvider: fn (): WalletAccount => $this->requireVendorAccount($vendor, $currency),
+            creditAccountProvider: fn (): WalletAccount => $this->requireSystemAccount(WalletAccount::TYPE_LEGACY_ADJUSTMENT, self::LEGACY_ADJUSTMENT_CODE, $currency),
+            amountMinor: $amountMinor,
+            currency: $currency,
+            reference: $reference,
+            idempotencyKey: $idempotencyKey,
+            metadata: array_merge([
+                'movement' => 'LEGACY_WALLET_MANUAL_DEBIT',
+            ], $metadata)
+        );
+    }
+
     private function requireVendorAccount(User $vendor, string $currency): WalletAccount
     {
         $account = $this->walletRepository->findVendorAccount($vendor, $currency);
@@ -191,6 +255,9 @@ class VendorWalletService
         return $account;
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
     private function postDoubleEntry(
         callable $debitAccountProvider,
         callable $creditAccountProvider,
@@ -271,6 +338,9 @@ class VendorWalletService
         });
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
     private function assertIdempotentPairMatches(
         WalletLedgerEntry $existingDebit,
         WalletLedgerEntry $existingCredit,
@@ -283,7 +353,8 @@ class VendorWalletService
         string $idempotencyKey
     ): void {
         $expectedCurrency = strtoupper($currency);
-        $expectedMovement = $metadata['movement'] ?? null;
+        $movement = $metadata['movement'] ?? null;
+        $expectedMovement = is_string($movement) ? $movement : null;
 
         $this->assertEntryMatches(
             entry: $existingDebit,
@@ -341,7 +412,8 @@ class VendorWalletService
             throw new IdempotencyConflictException(sprintf('Ledger idempotency key %s account mismatch.', $idempotencyKey));
         }
 
-        if ($entry->getCounterAccount()?->getId() !== $expectedCounterAccount->getId()) {
+        $counterAccount = $entry->getCounterAccount();
+        if (!$counterAccount instanceof WalletAccount || $counterAccount->getId() !== $expectedCounterAccount->getId()) {
             throw new IdempotencyConflictException(sprintf('Ledger idempotency key %s counterAccount mismatch.', $idempotencyKey));
         }
 

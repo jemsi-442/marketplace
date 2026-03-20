@@ -27,7 +27,7 @@ class ProtectedController extends AbstractController
             'email' => $user->getEmail(),
             'roles' => $user->getRoles(),
             'is_verified' => $user->isVerified(),
-            'created_at' => $user->getCreatedAt()?->format('Y-m-d H:i:s'),
+            'created_at' => $user->getCreatedAt()->format('Y-m-d H:i:s'),
         ]);
     }
 

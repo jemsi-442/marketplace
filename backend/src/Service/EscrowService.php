@@ -34,12 +34,9 @@ class EscrowService
             throw new \LogicException('Escrow already exists for this booking.');
         }
 
-        $vendor = $booking->getService()?->getVendor()?->getUser();
-        if (!$vendor instanceof User) {
-            throw new \LogicException('Booking does not resolve to a vendor user.');
-        }
+        $vendor = $booking->getService()->getVendor()->getUser();
 
-        if ($client->getId() !== $booking->getClient()?->getId()) {
+        if ($client->getId() !== $booking->getClient()->getId()) {
             throw new UnauthorizedFinancialOperationException('Only booking owner can create escrow.');
         }
 
@@ -70,6 +67,9 @@ class EscrowService
         });
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function initiateCollectionPayment(Escrow $escrow, string $msisdn, string $provider, string $callbackUrl): array
     {
         $riskMetadata = $escrow->getRiskMetadata();
@@ -79,11 +79,13 @@ class EscrowService
 
         $idempotencyKey = 'collect_' . $escrow->getReference();
 
+        /** @return array<string, mixed> */
         return $this->em->wrapInTransaction(function () use ($escrow, $msisdn, $provider, $callbackUrl, $idempotencyKey): array {
             $this->em->lock($escrow, LockMode::PESSIMISTIC_WRITE);
 
             $clientEmail = $escrow->getClient()->getEmail();
-            $localPart = explode('@', $clientEmail)[0] ?? 'Client';
+            $localPart = strtok($clientEmail, '@');
+            $localPart = $localPart !== false ? $localPart : 'Client';
             $response = $this->snippeClient->createCollection(
                 reference: $escrow->getReference(),
                 amountMinor: $escrow->getAmountMinor(),
@@ -97,7 +99,9 @@ class EscrowService
                 customerLastName: 'Client'
             );
 
-            $snippeReference = (string) (($response['data']['reference'] ?? '') ?: '');
+            $responseData = $response['data'] ?? null;
+            $snippeReferenceRaw = is_array($responseData) ? ($responseData['reference'] ?? '') : '';
+            $snippeReference = is_scalar($snippeReferenceRaw) ? (string) $snippeReferenceRaw : '';
             if ($snippeReference !== '') {
                 $escrow->setExternalPaymentReferenceForIntent($snippeReference, $response);
             }
@@ -108,12 +112,20 @@ class EscrowService
         });
     }
 
+    /**
+     * @param array<string, mixed> $payload
+     */
     public function handleCollectionWebhook(array $payload): void
     {
-        $reference = (string) ($payload['reference'] ?? '');
-        $status = strtoupper((string) ($payload['status'] ?? ''));
-        $externalTransactionId = (string) ($payload['transaction_id'] ?? ($payload['id'] ?? ''));
-        $gatewayReference = (string) ($payload['gateway_reference'] ?? $reference);
+        $referenceRaw = $payload['reference'] ?? '';
+        $statusRaw = $payload['status'] ?? '';
+        $externalTransactionIdRaw = $payload['transaction_id'] ?? ($payload['id'] ?? '');
+        $gatewayReferenceRaw = $payload['gateway_reference'] ?? null;
+
+        $reference = is_scalar($referenceRaw) ? (string) $referenceRaw : '';
+        $status = strtoupper(is_scalar($statusRaw) ? (string) $statusRaw : '');
+        $externalTransactionId = is_scalar($externalTransactionIdRaw) ? (string) $externalTransactionIdRaw : '';
+        $gatewayReference = is_scalar($gatewayReferenceRaw) ? (string) $gatewayReferenceRaw : $reference;
 
         if ($reference === '' || $status === '') {
             throw new \InvalidArgumentException('Collection webhook missing required fields.');
@@ -199,6 +211,9 @@ class EscrowService
         });
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
     public function openDispute(Escrow $escrow, User $client, array $metadata = []): void
     {
         $this->em->wrapInTransaction(function () use ($escrow, $client, $metadata): void {
@@ -217,6 +232,9 @@ class EscrowService
         });
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
     public function resolveDispute(Escrow $escrow, User $admin, bool $releaseToVendor, array $metadata = []): void
     {
         if (!in_array('ROLE_ADMIN', $admin->getRoles(), true)) {
@@ -229,6 +247,8 @@ class EscrowService
             if ($releaseToVendor) {
                 $platformFeeMinor = $this->platformFeeService->calculateEscrowFee($escrow->getAmountMinor());
                 $this->vendorWalletService->releaseEscrowToVendor($escrow, $platformFeeMinor, 'escrow_resolve_' . $escrow->getReference());
+            } else {
+                $this->vendorWalletService->refundEscrowExternally($escrow, 'escrow_refund_' . $escrow->getReference());
             }
 
             $escrow->transitionToResolved(array_merge($metadata, [
@@ -238,6 +258,12 @@ class EscrowService
                 'resolution' => $releaseToVendor ? 'VENDOR_RELEASE' : 'CLIENT_REFUND_EXTERNAL',
                 'metadata' => $metadata,
             ]);
+
+            $booking = $escrow->getBooking();
+            if ($booking !== null) {
+                $booking->setStatus($releaseToVendor ? Booking::STATUS_COMPLETED : Booking::STATUS_CANCELLED);
+            }
+
             $this->trustCalculator->recalculateForVendor($escrow->getVendor(), 'DISPUTE_RESOLVED', [
                 'escrow_reference' => $escrow->getReference(),
                 'release_to_vendor' => $releaseToVendor,

@@ -210,7 +210,122 @@ Architecture:
 
 ---
 
-# 1️⃣3️⃣ Future Fintech Enhancements
+# 1️⃣3️⃣ Local Runbook
+
+## Run the Backend
+
+From the project root:
+
+```bash
+cd /home/jaykali/marketplace
+php -S 127.0.0.1:8000 -t backend/public
+```
+
+The API does not define a homepage route, so `GET /` returning `404` is expected.
+Use `/api/...` routes for verification.
+
+## Run the Frontend
+
+The new enterprise SaaS frontend lives in `frontend/`.
+
+```bash
+cd /home/jaykali/marketplace/frontend
+cp .env.local.example .env.local
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:3000`.
+
+The frontend expects the Symfony API at `http://127.0.0.1:8000` by default.
+
+## Run API Tests
+
+Fast local run against the current configured test environment:
+
+```bash
+cd /home/jaykali/marketplace/backend
+composer test:api
+```
+
+Equivalent Make target:
+
+```bash
+make test-api
+```
+
+## Run the Quality Gate
+
+Fast local quality gate:
+
+```bash
+cd /home/jaykali/marketplace/backend
+composer quality:fast
+```
+
+Equivalent Make target:
+
+```bash
+make quality-fast
+```
+
+This runs:
+
+- `composer validate --no-check-publish`
+- PHP syntax lint across `src`, `tests`, `config`, and `bin`
+- PHPStan static analysis across `src` at level 9
+- Symfony container lint for `test` and `prod`
+- API PHPUnit suite
+
+Dependency advisory checks are kept in the stricter CI flow so local iteration stays fast.
+
+## Run API Tests Against a Dedicated Test Database
+
+1. Copy the example test env file:
+
+```bash
+cd /home/jaykali/marketplace/backend
+cp .env.test.local.example .env.test.local
+```
+
+2. Set `TEST_DATABASE_URL` to a dedicated database such as `marketplace_test`.
+
+Important:
+- the DB user in `TEST_DATABASE_URL` must be able to create that database, or the database must already exist before you run the isolated flow
+- if `composer quality:ci` stops at `doctrine:database:create`, fix DB privileges or pre-create `marketplace_test`, then rerun
+
+3. Prepare the database and run the isolated suite:
+
+```bash
+composer test:api:isolated
+```
+
+Equivalent Make target:
+
+```bash
+make test-api-isolated
+```
+
+For the same flow plus linting/validation, use:
+
+```bash
+composer quality:ci
+```
+
+This additionally runs:
+
+- `composer security:audit`
+
+Safety guardrails:
+
+- `prepare_test_db.sh` refuses to run if `TEST_DATABASE_URL` matches `DATABASE_URL`
+- test logging is muted in `test` env to keep PHPUnit output readable
+- the API suite currently covers auth/access, webhook idempotency, withdrawals, escrow release, and dispute resolution ledger flows
+- GitHub Actions runs the same isolated quality gate via `.github/workflows/backend-ci.yml`
+
+---
+
+# 1️⃣4️⃣ Future Fintech Enhancements
 
 - Stripe/PayPal Integration
 - Webhook verification
@@ -222,7 +337,7 @@ Architecture:
 
 ---
 
-# 👨‍💻 Author
+# 1️⃣5️⃣ Author
 
 Jemsi Fredrick  
 Backend Engineer | Fintech System Architect | Escrow Engine Designer

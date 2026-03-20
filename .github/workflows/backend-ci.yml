@@ -1,0 +1,67 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+      - 'README.md'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+      - 'README.md'
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: marketplace_ci
+          MARIADB_USER: marketplace
+          MARIADB_PASSWORD: marketplace
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -umarketplace -pmarketplace --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      APP_ENV: test
+      APP_DEBUG: 0
+      DATABASE_URL: mysql://marketplace:marketplace@127.0.0.1:3306/marketplace_ci?serverVersion=mariadb-11.8.5&charset=utf8mb4
+      TEST_DATABASE_URL: mysql://marketplace:marketplace@127.0.0.1:3306/marketplace_test?serverVersion=mariadb-11.8.5&charset=utf8mb4
+      SNIPPE_API_KEY: snp_ci_test_key
+      SNIPPE_BASE_URL: https://api.snippe.africa/v1
+      SNIPPE_WEBHOOK_SECRET: whsec_ci_test_secret
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: ctype, iconv, pdo_mysql
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate Composer
+        run: composer validate --no-check-publish
+
+      - name: Install Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Run Quality Gate
+        run: composer quality:ci

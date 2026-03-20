@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Entity;
 
 use App\Repository\NotificationRepository;
@@ -17,7 +19,7 @@ class Notification
 
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(nullable: false)]
-    private ?User $user = null;
+    private User $user;
 
     #[ORM\Column(type: 'string', length: 255)]
     #[Assert\NotBlank]
@@ -30,8 +32,8 @@ class Notification
     #[ORM\Column(type: 'boolean')]
     private bool $isRead = false;
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $createdAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
 
     public function __construct()
     {
@@ -41,7 +43,7 @@ class Notification
     // Getters & Setters
     public function getId(): ?int { return $this->id; }
 
-    public function getUser(): ?User { return $this->user; }
+    public function getUser(): User { return $this->user; }
     public function setUser(User $user): self { $this->user = $user; return $this; }
 
     public function getTitle(): string { return $this->title; }
@@ -53,5 +55,5 @@ class Notification
     public function getIsRead(): bool { return $this->isRead; }
     public function setIsRead(bool $isRead): self { $this->isRead = $isRead; return $this; }
 
-    public function getCreatedAt(): \DateTimeInterface { return $this->createdAt; }
+    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }

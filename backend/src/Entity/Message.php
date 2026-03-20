@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Entity;
 
 use App\Repository\MessageRepository;
@@ -17,18 +19,18 @@ class Message
 
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(nullable: false)]
-    private ?User $sender = null;
+    private User $sender;
 
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(nullable: false)]
-    private ?User $receiver = null;
+    private User $receiver;
 
     #[ORM\Column(type: 'text')]
     #[Assert\NotBlank]
     private string $content = '';
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $createdAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
 
     public function __construct()
     {
@@ -43,7 +45,7 @@ class Message
         return $this->id;
     }
 
-    public function getSender(): ?User
+    public function getSender(): User
     {
         return $this->sender;
     }
@@ -54,7 +56,7 @@ class Message
         return $this;
     }
 
-    public function getReceiver(): ?User
+    public function getReceiver(): User
     {
         return $this->receiver;
     }
@@ -76,7 +78,7 @@ class Message
         return $this;
     }
 
-    public function getCreatedAt(): \DateTimeInterface
+    public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
     }

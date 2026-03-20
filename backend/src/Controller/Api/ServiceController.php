@@ -6,6 +6,7 @@ use App\Entity\Service;
 use App\Entity\User;
 use App\Entity\VendorProfile;
 use App\Repository\ServiceRepository;
+use App\Security\ServiceVoter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -16,6 +17,26 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[Route('/api/services')]
 class ServiceController extends AbstractController
 {
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function resolvePriceCents(array $data): ?int
+    {
+        if (isset($data['price_cents']) && is_numeric($data['price_cents'])) {
+            return max(0, (int) $data['price_cents']);
+        }
+
+        if (isset($data['price_minor']) && is_numeric($data['price_minor'])) {
+            return max(0, (int) $data['price_minor']);
+        }
+
+        if (isset($data['price']) && is_numeric($data['price'])) {
+            return max(0, (int) round(((float) $data['price']) * 100));
+        }
+
+        return null;
+    }
+
     #[Route('', methods: ['GET'])]
     public function list(ServiceRepository $repository): JsonResponse
     {
@@ -23,7 +44,7 @@ class ServiceController extends AbstractController
 
         $result = [];
         foreach ($services as $service) {
-            $vendorUser = $service->getVendor()?->getUser();
+            $vendorUser = $service->getVendor()->getUser();
             $result[] = [
                 'id' => $service->getId(),
                 'title' => $service->getTitle(),
@@ -31,7 +52,7 @@ class ServiceController extends AbstractController
                 'category' => $service->getCategory(),
                 'price_cents' => $service->getPriceCents(),
                 'is_active' => $service->isActive(),
-                'vendor_user_id' => $vendorUser?->getId(),
+                'vendor_user_id' => $vendorUser->getId(),
             ];
         }
 
@@ -55,16 +76,26 @@ class ServiceController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Invalid JSON payload'], 400);
+        }
+        /** @var array<string, mixed> $data */
 
-        if (!isset($data['title'], $data['price'])) {
-            return $this->json(['error' => 'title and price required'], 400);
+        $priceCents = $this->resolvePriceCents($data);
+        $title = $data['title'] ?? null;
+        if (!is_string($title) || $title === '' || $priceCents === null) {
+            return $this->json(['error' => 'title and price_cents required'], 400);
+        }
+
+        if ($priceCents <= 0) {
+            return $this->json(['error' => 'price_cents must be positive'], 400);
         }
 
         $service = new Service();
-        $service->setTitle($data['title']);
-        $service->setDescription($data['description'] ?? null);
-        $service->setCategory($data['category'] ?? null);
-        $service->setPrice((float)$data['price']);
+        $service->setTitle($title);
+        $service->setDescription(isset($data['description']) && is_string($data['description']) ? $data['description'] : null);
+        $service->setCategory(isset($data['category']) && is_string($data['category']) ? $data['category'] : null);
+        $service->setPriceCents($priceCents);
         $service->setVendor($vendorProfile);
 
         $em->persist($service);
@@ -83,7 +114,7 @@ class ServiceController extends AbstractController
             return $this->json(['error' => 'Service not available'], 404);
         }
 
-        $vendorUser = $service->getVendor()?->getUser();
+        $vendorUser = $service->getVendor()->getUser();
 
         return $this->json([
             'id' => $service->getId(),
@@ -92,7 +123,7 @@ class ServiceController extends AbstractController
             'category' => $service->getCategory(),
             'price_cents' => $service->getPriceCents(),
             'is_active' => $service->isActive(),
-            'vendor_user_id' => $vendorUser?->getId(),
+            'vendor_user_id' => $vendorUser->getId(),
         ]);
     }
 
@@ -108,26 +139,34 @@ class ServiceController extends AbstractController
             return $this->json(['error' => 'Unauthorized'], 403);
         }
 
-        if ($service->getVendor()?->getUser()?->getId() !== $user->getId()) {
-            return $this->json(['error' => 'Forbidden'], 403);
-        }
+        $this->denyAccessUnlessGranted(ServiceVoter::UPDATE, $service);
 
         $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Invalid JSON payload'], 400);
+        }
+        /** @var array<string, mixed> $data */
 
-        if (isset($data['title'])) {
+        if (isset($data['title']) && is_string($data['title']) && $data['title'] !== '') {
             $service->setTitle($data['title']);
         }
 
         if (isset($data['description'])) {
-            $service->setDescription($data['description']);
+            $service->setDescription(is_string($data['description']) ? $data['description'] : null);
         }
 
-        if (isset($data['price'])) {
-            $service->setPrice((float)$data['price']);
+        $priceCents = $this->resolvePriceCents($data);
+        if ($priceCents !== null) {
+            if ($priceCents <= 0) {
+                return $this->json(['error' => 'price_cents must be positive'], 400);
+            }
+
+            $service->setPriceCents($priceCents);
         }
 
         if (array_key_exists('category', $data)) {
-            $service->setCategory($data['category'] !== null ? (string) $data['category'] : null);
+            $category = $data['category'];
+            $service->setCategory(is_string($category) ? $category : null);
         }
 
         $em->flush();
@@ -146,9 +185,7 @@ class ServiceController extends AbstractController
             return $this->json(['error' => 'Unauthorized'], 403);
         }
 
-        if ($service->getVendor()?->getUser()?->getId() !== $user->getId()) {
-            return $this->json(['error' => 'Forbidden'], 403);
-        }
+        $this->denyAccessUnlessGranted(ServiceVoter::DELETE, $service);
 
         $service->deactivate();
         $em->flush();

@@ -15,6 +15,9 @@ class EscrowAuditLogger
     {
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
     public function log(Escrow $escrow, string $action, ?User $actor = null, array $metadata = []): void
     {
         $this->em->persist(new EscrowAuditLog(

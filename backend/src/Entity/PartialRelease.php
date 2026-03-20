@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
@@ -30,8 +32,8 @@ class PartialRelease
     #[ORM\Column(type: 'boolean')]
     private bool $released = false;
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $createdAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
 
     public function __construct()
     {
@@ -51,6 +53,18 @@ class PartialRelease
     public function setEscrow(Escrow $escrow): self
     {
         $this->escrow = $escrow;
+        return $this;
+    }
+
+    public function getMilestone(): string
+    {
+        return $this->milestone;
+    }
+
+    public function setMilestone(string $milestone): self
+    {
+        $this->milestone = trim($milestone);
+
         return $this;
     }
 
@@ -85,5 +99,10 @@ class PartialRelease
     {
         $this->released = true;
         return $this;
+    }
+
+    public function getCreatedAt(): \DateTimeImmutable
+    {
+        return $this->createdAt;
     }
 }

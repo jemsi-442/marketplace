@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Entity\Review;
 use App\Entity\Booking;
 use App\Entity\User;
+use App\Security\BookingVoter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,6 +21,7 @@ class ReviewController extends AbstractController
         int $vendorId,
         EntityManagerInterface $em
     ): JsonResponse {
+        /** @var array<int, Review> $reviews */
         $reviews = $em->getRepository(Review::class)->createQueryBuilder('r')
             ->join('r.booking', 'b')
             ->join('b.service', 's')
@@ -36,7 +38,7 @@ class ReviewController extends AbstractController
             $booking = $review->getBooking();
             $result[] = [
                 'id' => $review->getId(),
-                'booking_id' => $booking?->getId(),
+                'booking_id' => $booking->getId(),
                 'rating' => $review->getRating(),
                 'comment' => $review->getComment(),
                 'created_at' => $review->getCreatedAt()->format('Y-m-d H:i:s'),
@@ -57,17 +59,21 @@ class ReviewController extends AbstractController
             return $this->json(['error' => 'Unauthorized'], 403);
         }
         $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Invalid JSON payload'], 400);
+        }
 
-        if (
-            empty($data['bookingId']) ||
-            empty($data['rating'])
-        ) {
+        $bookingId = $data['bookingId'] ?? null;
+        $rating = $data['rating'] ?? null;
+
+        if (!is_numeric($bookingId) || !is_numeric($rating)) {
             return $this->json([
                 'error' => 'bookingId and rating are required'
             ], 400);
         }
 
-        if ($data['rating'] < 1 || $data['rating'] > 5) {
+        $rating = (int) $rating;
+        if ($rating < 1 || $rating > 5) {
             return $this->json([
                 'error' => 'Rating must be between 1 and 5'
             ], 400);
@@ -75,7 +81,7 @@ class ReviewController extends AbstractController
 
         /** @var Booking|null $booking */
         $booking = $em->getRepository(Booking::class)
-            ->find($data['bookingId']);
+            ->find((int) $bookingId);
 
         if (!$booking) {
             return $this->json([
@@ -83,18 +89,14 @@ class ReviewController extends AbstractController
             ], 404);
         }
 
-        // 🔐 Booking ownership check
-        if ($booking->getClient()?->getId() !== $user->getId()) {
-            return $this->json([
-                'error' => 'You are not allowed to review this booking'
-            ], 403);
-        }
+        if (!$this->isGranted(BookingVoter::REVIEW, $booking)) {
+            $statusCode = $booking->getStatus() !== Booking::STATUS_COMPLETED ? 400 : 403;
 
-        // 🔐 Booking must be completed
-        if ($booking->getStatus() !== Booking::STATUS_COMPLETED) {
             return $this->json([
-                'error' => 'Booking not completed'
-            ], 400);
+                'error' => $statusCode === 400
+                    ? 'Booking not completed'
+                    : 'You are not allowed to review this booking'
+            ], $statusCode);
         }
 
         // 🔐 Prevent duplicate review
@@ -108,22 +110,14 @@ class ReviewController extends AbstractController
             ], 409);
         }
 
-        $vendorUser = $booking->getService()?->getVendor()?->getUser();
-        if (!$vendorUser instanceof User) {
-            return $this->json(['error' => 'Booking does not resolve to vendor'], 422);
-        }
-
-        // ❌ Vendor cannot review self (extra safety)
-        if ($vendorUser->getId() === $user->getId()) {
-            return $this->json([
-                'error' => 'You cannot review yourself'
-            ], 403);
-        }
+        $vendorUser = $booking->getService()->getVendor()->getUser();
 
         $review = new Review();
         $review->setBooking($booking);
-        $review->setRating((int)$data['rating']);
-        $review->setComment($data['comment'] ?? null);
+        $review->setRating($rating);
+
+        $comment = $data['comment'] ?? null;
+        $review->setComment(is_string($comment) ? $comment : null);
 
         $em->persist($review);
         $em->flush();

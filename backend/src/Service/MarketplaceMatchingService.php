@@ -16,6 +16,9 @@ class MarketplaceMatchingService
     ) {
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
     public function rankVendors(
         string $searchQuery,
         int $budgetMinor,
@@ -33,6 +36,7 @@ class MarketplaceMatchingService
                 ->setParameter('budget', $budgetMinor);
         }
 
+        /** @var array<int, Service> $services */
         $services = $qb->getQuery()->getResult();
 
         $ranked = $this->matchingStrategy->rank($services, [

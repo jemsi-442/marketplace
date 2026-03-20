@@ -31,10 +31,6 @@ final class PartialReleaseService
         $count = 0;
 
         foreach ($escrow->getPartialReleases() as $release) {
-            if (!$release instanceof PartialRelease) {
-                continue;
-            }
-
             if (!$release->isReleased()) {
                 $release->markReleased();
                 $count++;

@@ -11,8 +11,10 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/messages')]
+#[IsGranted('IS_AUTHENTICATED_FULLY')]
 class MessageController extends AbstractController
 {
     #[Route('', name: 'message_send', methods: ['POST'])]
@@ -22,13 +24,18 @@ class MessageController extends AbstractController
         UserRepository $userRepo
     ): JsonResponse {
         $sender = $this->getUser();
-        if (!$sender) {
+        if (!$sender instanceof User) {
             return $this->json(['error' => 'Unauthorized'], 403);
         }
 
-        $data = json_decode($request->getContent(), true) ?? [];
+        $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Invalid JSON payload'], 400);
+        }
+
         $receiverId = $data['receiverId'] ?? null;
-        $content = trim($data['content'] ?? '');
+        $contentValue = $data['content'] ?? '';
+        $content = is_string($contentValue) ? trim($contentValue) : '';
 
         if (!$receiverId || !$content) {
             return $this->json(['error' => 'receiverId and content are required'], 400);
@@ -63,10 +70,11 @@ class MessageController extends AbstractController
     public function inbox(MessageRepository $repo): JsonResponse
     {
         $user = $this->getUser();
-        if (!$user) {
+        if (!$user instanceof User) {
             return $this->json(['error' => 'Unauthorized'], 403);
         }
 
+        /** @var array<int, Message> $messages */
         $messages = $repo->createQueryBuilder('m')
             ->where('m.receiver = :user')
             ->orWhere('m.sender = :user')
@@ -77,12 +85,15 @@ class MessageController extends AbstractController
 
         $result = [];
         foreach ($messages as $m) {
+            $sender = $m->getSender();
+            $receiver = $m->getReceiver();
+
             $result[] = [
                 'id' => $m->getId(),
-                'senderId' => $m->getSender()->getId(),
-                'senderEmail' => $m->getSender()->getEmail(),
-                'receiverId' => $m->getReceiver()->getId(),
-                'receiverEmail' => $m->getReceiver()->getEmail(),
+                'senderId' => $sender->getId(),
+                'senderEmail' => $sender->getEmail(),
+                'receiverId' => $receiver->getId(),
+                'receiverEmail' => $receiver->getEmail(),
                 'content' => $m->getContent(),
                 'createdAt' => $m->getCreatedAt()->format('Y-m-d H:i:s')
             ];

@@ -15,6 +15,17 @@ class PlatformMetricsHealthService
     ) {
     }
 
+    /**
+     * @return array{
+     *     status: string,
+     *     is_healthy: bool,
+     *     is_stale: bool,
+     *     stale_threshold_hours: int,
+     *     message: string,
+     *     last_snapshot_date?: string,
+     *     snapshot_age_hours?: int
+     * }
+     */
     public function getHealthStatus(): array
     {
         $latest = $this->em->getRepository(PlatformMetricsSnapshot::class)
@@ -46,11 +57,24 @@ class PlatformMetricsHealthService
         ];
     }
 
+    /**
+     * @return array{
+     *     window_days: int,
+     *     points: int,
+     *     summary: array{
+     *         total_volume_minor: int,
+     *         total_fees_collected_minor: int,
+     *         avg_high_risk_escrow_percentage: float
+     *     },
+     *     trend: array<int, array<string, mixed>>
+     * }
+     */
     public function getTrend(int $days): array
     {
         $days = max(1, min(365, $days));
         $fromDate = (new \DateTimeImmutable('today'))->modify('-' . ($days - 1) . ' days');
 
+        /** @var array<int, array<string, mixed>> $rows */
         $rows = $this->em->getRepository(PlatformMetricsSnapshot::class)
             ->createQueryBuilder('m')
             ->where('m.snapshotDate >= :fromDate')
@@ -65,9 +89,13 @@ class PlatformMetricsHealthService
         $riskSum = 0.0;
 
         foreach ($rows as $row) {
-            $volumeSum += (int) ($row['totalVolumeMinor'] ?? 0);
-            $feesSum += (int) ($row['totalFeesCollectedMinor'] ?? 0);
-            $riskSum += (float) ($row['highRiskEscrowPercentage'] ?? 0.0);
+            $volume = $row['totalVolumeMinor'] ?? 0;
+            $fees = $row['totalFeesCollectedMinor'] ?? 0;
+            $risk = $row['highRiskEscrowPercentage'] ?? 0.0;
+
+            $volumeSum += is_numeric($volume) ? (int) $volume : 0;
+            $feesSum += is_numeric($fees) ? (int) $fees : 0;
+            $riskSum += is_numeric($risk) ? (float) $risk : 0.0;
         }
 
         return [

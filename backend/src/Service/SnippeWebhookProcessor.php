@@ -15,6 +15,7 @@ final class SnippeWebhookProcessor
     }
 
     /**
+     * @param array<string, array<int, string|null>|string> $headers
      * @return array{status:int, body:array<string,mixed>}
      */
     public function processCollection(string $rawBody, array $headers): array
@@ -23,6 +24,7 @@ final class SnippeWebhookProcessor
     }
 
     /**
+     * @param array<string, array<int, string|null>|string> $headers
      * @return array{status:int, body:array<string,mixed>}
      */
     public function processPayout(string $rawBody, array $headers): array
@@ -31,6 +33,7 @@ final class SnippeWebhookProcessor
     }
 
     /**
+     * @param array<string, array<int, string|null>|string> $headers
      * @return array{status:int, body:array<string,mixed>}
      */
     private function process(string $kind, string $rawBody, array $headers): array
@@ -50,19 +53,24 @@ final class SnippeWebhookProcessor
         if (!is_array($payload)) {
             return ['status' => 400, 'body' => ['error' => 'Invalid JSON payload']];
         }
+        /** @var array<string, mixed> $payload */
 
-        $eventId = (string) ($payload['id'] ?? $payload['event_id'] ?? '');
+        $eventIdRaw = $payload['id'] ?? ($payload['event_id'] ?? '');
+        $eventId = is_scalar($eventIdRaw) ? (string) $eventIdRaw : '';
         if ($eventId === '') {
             $eventId = hash('sha256', $rawBody);
         }
 
-        $eventType = strtoupper((string) ($eventHeaderType ?? ($payload['type'] ?? $kind)));
+        $eventTypeRaw = $eventHeaderType ?? ($payload['type'] ?? $kind);
+        $eventType = strtoupper(is_scalar($eventTypeRaw) ? (string) $eventTypeRaw : $kind);
 
-        $resourceReference = (string) (
-            $payload['reference']
-            ?? ($payload['data']['reference'] ?? '')
-            ?? ($payload['data']['metadata']['order_id'] ?? '')
-        );
+        $data = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+        $metadata = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
+
+        $resourceReferenceRaw = $payload['reference']
+            ?? ($data['reference'] ?? null)
+            ?? ($metadata['order_id'] ?? null);
+        $resourceReference = is_scalar($resourceReferenceRaw) ? (string) $resourceReferenceRaw : '';
 
         if ($resourceReference === '') {
             return ['status' => 400, 'body' => ['error' => 'Missing webhook reference']];
@@ -109,22 +117,25 @@ final class SnippeWebhookProcessor
         return ['status' => 202, 'body' => ['message' => 'Webhook processed']];
     }
 
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
     private function normalize(string $kind, array $payload): array
     {
         $data = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+        $metadata = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
 
-        $gatewayReference = (string) ($data['reference'] ?? ($payload['reference'] ?? ''));
+        $gatewayReferenceRaw = $data['reference'] ?? ($payload['reference'] ?? null);
+        $gatewayReference = is_scalar($gatewayReferenceRaw) ? (string) $gatewayReferenceRaw : '';
 
-        $reference = (string) (
-            $payload['reference']
-            ?? ($data['reference'] ?? '')
-            ?? ($data['metadata']['order_id'] ?? '')
-        );
+        $referenceRaw = $payload['reference']
+            ?? ($data['reference'] ?? null)
+            ?? ($metadata['order_id'] ?? null);
+        $reference = is_scalar($referenceRaw) ? (string) $referenceRaw : '';
 
-        $statusRaw = (string) (
-            $payload['status']
-            ?? ($data['status'] ?? '')
-        );
+        $statusRawValue = $payload['status'] ?? ($data['status'] ?? null);
+        $statusRaw = is_scalar($statusRawValue) ? (string) $statusRawValue : '';
         $statusRaw = strtolower($statusRaw);
 
         $status = match ($statusRaw) {
@@ -133,12 +144,14 @@ final class SnippeWebhookProcessor
             default => strtoupper($statusRaw),
         };
 
-        $externalTransactionId = (string) (
-            $payload['transaction_id']
-            ?? ($data['external_reference'] ?? '')
-            ?? ($data['externalReference'] ?? '')
-            ?? ($payload['id'] ?? '')
-        );
+        $externalTransactionIdRaw = $payload['transaction_id']
+            ?? ($data['external_reference'] ?? null)
+            ?? ($data['externalReference'] ?? null)
+            ?? ($payload['id'] ?? null);
+        $externalTransactionId = is_scalar($externalTransactionIdRaw) ? (string) $externalTransactionIdRaw : '';
+
+        $reasonRaw = $payload['reason'] ?? ($data['reason'] ?? null);
+        $reason = is_scalar($reasonRaw) ? (string) $reasonRaw : '';
 
         // Keep legacy fields expected by EscrowService/WithdrawalService.
         return [
@@ -146,11 +159,15 @@ final class SnippeWebhookProcessor
             'gateway_reference' => $gatewayReference,
             'status' => $status,
             'transaction_id' => $externalTransactionId,
+            'reason' => $reason,
             'kind' => $kind,
             'data' => $data,
         ];
     }
 
+    /**
+     * @param array<string, array<int, string|null>|string> $headers
+     */
     private function header(array $headers, string $name): ?string
     {
         $name = strtolower($name);
@@ -164,7 +181,7 @@ final class SnippeWebhookProcessor
                 return $first !== null ? (string) $first : null;
             }
 
-            return $value !== null ? (string) $value : null;
+            return (string) $value;
         }
 
         return null;

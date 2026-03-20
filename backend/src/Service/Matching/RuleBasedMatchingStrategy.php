@@ -10,29 +10,34 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class RuleBasedMatchingStrategy implements MatchingStrategyInterface
 {
+    /**
+     * @param array<string, float|int> $weights
+     */
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly array $weights
     ) {
     }
 
+    /**
+     * @param array<int, Service> $services
+     * @param array<string, mixed> $criteria
+     * @return array<int, array<string, mixed>>
+     */
     public function rank(array $services, array $criteria): array
     {
-        $query = strtolower(trim((string) ($criteria['query'] ?? '')));
-        $budgetMinor = (int) ($criteria['budget_minor'] ?? 0);
-        $riskTolerance = strtoupper((string) ($criteria['risk_tolerance'] ?? 'MEDIUM'));
+        $queryValue = $criteria['query'] ?? '';
+        $budgetValue = $criteria['budget_minor'] ?? 0;
+        $riskToleranceValue = $criteria['risk_tolerance'] ?? 'MEDIUM';
+
+        $query = is_string($queryValue) ? strtolower(trim($queryValue)) : '';
+        $budgetMinor = is_numeric($budgetValue) ? (int) $budgetValue : 0;
+        $riskTolerance = is_string($riskToleranceValue) ? strtoupper($riskToleranceValue) : 'MEDIUM';
 
         $ranked = [];
 
         foreach ($services as $service) {
-            if (!$service instanceof Service) {
-                continue;
-            }
-
-            $vendor = $service->getVendor()?->getUser();
-            if ($vendor === null) {
-                continue;
-            }
+            $vendor = $service->getVendor()->getUser();
 
             $trustProfile = $this->em->getRepository(VendorTrustProfile::class)->findOneBy(['vendor' => $vendor]);
             $trustScore = $trustProfile instanceof VendorTrustProfile

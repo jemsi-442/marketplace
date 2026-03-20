@@ -23,7 +23,7 @@ class Service
      */
     #[ORM\ManyToOne(targetEntity: VendorProfile::class)]
     #[ORM\JoinColumn(nullable: false, onDelete: 'RESTRICT')]
-    private ?VendorProfile $vendor = null;
+    private VendorProfile $vendor;
 
     #[ORM\Column(type: 'string', length: 255)]
     #[Assert\NotBlank]
@@ -84,7 +84,7 @@ class Service
         return $this->id;
     }
 
-    public function getVendor(): ?VendorProfile
+    public function getVendor(): VendorProfile
     {
         return $this->vendor;
     }
@@ -140,6 +140,21 @@ class Service
         return $this->priceCents;
     }
 
+    public function setPriceCents(int $priceCents): self
+    {
+        if ($priceCents < 0) {
+            throw new \LogicException('Service price cannot be negative.');
+        }
+
+        if ($this->priceCents !== $priceCents) {
+            $this->version++;
+        }
+
+        $this->priceCents = $priceCents;
+
+        return $this;
+    }
+
     public function getPrice(): float
     {
         return $this->priceCents / 100;
@@ -147,19 +162,7 @@ class Service
 
     public function setPrice(float $price): self
     {
-        if ($price < 0) {
-            throw new \LogicException('Service price cannot be negative.');
-        }
-
-        $newCents = (int) round($price * 100);
-
-        if ($this->priceCents !== $newCents) {
-            $this->version++;
-        }
-
-        $this->priceCents = $newCents;
-
-        return $this;
+        return $this->setPriceCents((int) round($price * 100));
     }
 
     /*

@@ -1,0 +1,14 @@
+parameters:
+    level: 9
+    paths:
+        - src
+    tmpDir: var/phpstan
+    doctrine:
+        objectManagerLoader: tests/object-manager.php
+    symfony:
+        containerXmlPath: var/cache/dev/phpstan-container.xml
+        consoleApplicationLoader: tests/console-application.php
+    ignoreErrors:
+        -
+            identifier: missingType.iterableValue
+            path: src/Entity/*

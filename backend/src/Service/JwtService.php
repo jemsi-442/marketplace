@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
 use App\Entity\User;
@@ -23,12 +25,25 @@ class JwtService
         int $accessTtl = 900,
         int $refreshTtl = 604800
     ) {
-        $this->privateKey = file_get_contents($privateKeyPath);
-        $this->publicKey  = file_get_contents($publicKeyPath);
+        $privateKey = file_get_contents($privateKeyPath);
+        if ($privateKey === false || $privateKey === '') {
+            throw new \RuntimeException(sprintf('Unable to load JWT private key from %s.', $privateKeyPath));
+        }
+
+        $publicKey = file_get_contents($publicKeyPath);
+        if ($publicKey === false || $publicKey === '') {
+            throw new \RuntimeException(sprintf('Unable to load JWT public key from %s.', $publicKeyPath));
+        }
+
+        $this->privateKey = $privateKey;
+        $this->publicKey  = $publicKey;
         $this->accessTtl  = $accessTtl;
         $this->refreshTtl = $refreshTtl;
     }
 
+    /**
+     * @return array{access_token:string, refresh_token:string, expires_in:int}
+     */
     public function generateTokens(
         User $user,
         ?string $deviceName = null,
@@ -76,6 +91,9 @@ class JwtService
         ];
     }
 
+    /**
+     * @return array{access_token:string, refresh_token:string, expires_in:int}|null
+     */
     public function refresh(string $refreshToken): ?array
     {
         $payload = $this->validate($refreshToken);
@@ -102,6 +120,9 @@ class JwtService
         return $this->generateTokens($user);
     }
 
+    /**
+     * @return array<string, mixed>|null
+     */
     public function validate(string $token): ?array
     {
         try {

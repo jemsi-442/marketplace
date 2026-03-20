@@ -10,6 +10,9 @@ use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\Persistence\ManagerRegistry;
 
+/**
+ * @extends ServiceEntityRepository<WalletAccount>
+ */
 class WalletRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)

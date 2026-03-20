@@ -9,15 +9,15 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/admin')]
+#[IsGranted('ROLE_ADMIN')]
 final class AdminController extends AbstractController
 {
     #[Route('/users', name: 'admin_users_list', methods: ['GET'])]
     public function listUsers(EntityManagerInterface $em): JsonResponse
     {
-        $this->denyAccessUnlessGranted('ROLE_ADMIN');
-
         $users = $em->getRepository(User::class)->findAll();
         $result = [];
 
@@ -37,8 +37,6 @@ final class AdminController extends AbstractController
     #[Route('/users/{id}/lock', name: 'admin_user_lock', methods: ['POST'])]
     public function lockUser(User $user, EntityManagerInterface $em): JsonResponse
     {
-        $this->denyAccessUnlessGranted('ROLE_ADMIN');
-
         $user->setIsLocked(true);
         $em->flush();
 
@@ -48,8 +46,6 @@ final class AdminController extends AbstractController
     #[Route('/users/{id}/unlock', name: 'admin_user_unlock', methods: ['POST'])]
     public function unlockUser(User $user, EntityManagerInterface $em): JsonResponse
     {
-        $this->denyAccessUnlessGranted('ROLE_ADMIN');
-
         $user->setIsLocked(false);
         $user->resetFailedLoginAttempts();
         $em->flush();
@@ -60,8 +56,6 @@ final class AdminController extends AbstractController
     #[Route('/vendors', name: 'admin_vendors_list', methods: ['GET'])]
     public function listVendors(EntityManagerInterface $em): JsonResponse
     {
-        $this->denyAccessUnlessGranted('ROLE_ADMIN');
-
         $vendors = $em->getRepository(VendorProfile::class)->findAll();
         $result = [];
 
@@ -72,7 +66,7 @@ final class AdminController extends AbstractController
                 'bio' => $vendor->getBio(),
                 'website' => $vendor->getWebsite(),
                 'portfolio_link' => $vendor->getPortfolioLink(),
-                'user_id' => $vendor->getUser()?->getId(),
+                'user_id' => $vendor->getUser()->getId(),
             ];
         }
 
@@ -82,8 +76,6 @@ final class AdminController extends AbstractController
     #[Route('/analytics', name: 'admin_analytics', methods: ['GET'])]
     public function analytics(EntityManagerInterface $em): JsonResponse
     {
-        $this->denyAccessUnlessGranted('ROLE_ADMIN');
-
         $userCount = $em->getRepository(User::class)->count([]);
         $vendorCount = $em->getRepository(VendorProfile::class)->count([]);
         $bookingCount = $em->getRepository(Booking::class)->count([]);

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Entity;
 
 use App\Repository\PaymentRepository;
@@ -17,33 +19,30 @@ class Payment
 
     #[ORM\ManyToOne(targetEntity: Booking::class)]
     #[ORM\JoinColumn(nullable: false)]
-    private ?Booking $booking = null;
+    private Booking $booking;
 
-    #[ORM\Column(type: 'float')]
+    #[ORM\Column(type: 'bigint')]
     #[Assert\Positive]
-    private float $amount = 0.0;
+    private int $amountMinor = 0;
 
     #[ORM\Column(type: 'string', length: 50)]
     #[Assert\Choice(['pending', 'completed', 'failed'])]
     private string $status = 'pending';
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $createdAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
 
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
     }
 
-    // =====================
-    // Getters & Setters
-    // =====================
     public function getId(): ?int
     {
         return $this->id;
     }
 
-    public function getBooking(): ?Booking
+    public function getBooking(): Booking
     {
         return $this->booking;
     }
@@ -51,18 +50,40 @@ class Payment
     public function setBooking(Booking $booking): self
     {
         $this->booking = $booking;
+
         return $this;
     }
 
+    public function getAmountMinor(): int
+    {
+        return $this->amountMinor;
+    }
+
+    public function setAmountMinor(int $amountMinor): self
+    {
+        if ($amountMinor < 0) {
+            throw new \InvalidArgumentException('Payment amount minor must be zero or positive.');
+        }
+
+        $this->amountMinor = $amountMinor;
+
+        return $this;
+    }
+
+    /**
+     * Temporary compatibility wrapper for legacy callers using major units.
+     */
     public function getAmount(): float
     {
-        return $this->amount;
+        return $this->amountMinor / 100;
     }
 
+    /**
+     * Temporary compatibility wrapper for legacy callers using major units.
+     */
     public function setAmount(float $amount): self
     {
-        $this->amount = $amount;
-        return $this;
+        return $this->setAmountMinor((int) round($amount * 100));
     }
 
     public function getStatus(): string
@@ -73,10 +94,11 @@ class Payment
     public function setStatus(string $status): self
     {
         $this->status = $status;
+
         return $this;
     }
 
-    public function getCreatedAt(): \DateTimeInterface
+    public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
     }

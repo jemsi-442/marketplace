@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Entity;
 
 use App\Repository\DisputeRepository;
@@ -17,7 +19,7 @@ class Dispute
 
     #[ORM\ManyToOne(targetEntity: Booking::class)]
     #[ORM\JoinColumn(nullable: false)]
-    private ?Booking $booking = null;
+    private Booking $booking;
 
     #[ORM\Column(type: 'text')]
     #[Assert\NotBlank]
@@ -27,11 +29,11 @@ class Dispute
     #[Assert\Choice(['pending', 'resolved', 'rejected'])]
     private string $status = 'pending';
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $createdAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $updatedAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $updatedAt;
 
     public function __construct()
     {
@@ -47,7 +49,7 @@ class Dispute
         return $this->id;
     }
 
-    public function getBooking(): ?Booking
+    public function getBooking(): Booking
     {
         return $this->booking;
     }
@@ -80,17 +82,17 @@ class Dispute
         return $this;
     }
 
-    public function getCreatedAt(): \DateTimeInterface
+    public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
     }
 
-    public function getUpdatedAt(): \DateTimeInterface
+    public function getUpdatedAt(): \DateTimeImmutable
     {
         return $this->updatedAt;
     }
 
-    public function setUpdatedAt(\DateTimeInterface $updatedAt): self
+    public function setUpdatedAt(\DateTimeImmutable $updatedAt): self
     {
         $this->updatedAt = $updatedAt;
         return $this;

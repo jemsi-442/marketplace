@@ -29,20 +29,29 @@ class DisputeAIService
 
     /**
      * Collect structured dispute signals
+     *
+     * @return array<string, float>
      */
     private function collectSignals(Dispute $dispute): array
     {
+        $booking = $dispute->getBooking();
+        $client = $booking->getClient();
+        $vendor = $booking->getService()->getVendor()->getUser();
+        $reason = mb_strtolower(trim($dispute->getReason()));
+
         return [
-            'vendor_trust'        => $this->normalize($dispute->getVendorTrustScore()),
-            'client_trust'        => $this->normalize($dispute->getClientTrustScore()),
-            'delivery_compliance' => $this->normalize($dispute->getDeliveryComplianceScore()),
-            'evidence_strength'   => $this->normalize($dispute->getEvidenceScore()),
-            'message_sentiment'   => $this->normalize($dispute->getSentimentScore()),
+            'vendor_trust'        => $this->normalizePercent($vendor->getTrustScore()),
+            'client_trust'        => $this->normalizePercent($client->getTrustScore()),
+            'delivery_compliance' => $this->deliveryComplianceSignal($booking->getStatus()),
+            'evidence_strength'   => $this->evidenceStrengthSignal($reason),
+            'message_sentiment'   => $this->sentimentSignal($reason),
         ];
     }
 
     /**
      * Weighted scoring model
+     *
+     * @param array<string, float> $signals
      */
     private function calculateScore(array $signals): float
     {
@@ -58,6 +67,8 @@ class DisputeAIService
 
     /**
      * Convert score → decision
+     *
+     * @return array{0: string, 1: float}
      */
     private function resolveDecision(float $score): array
     {
@@ -77,21 +88,59 @@ class DisputeAIService
     /**
      * Normalize score to 0–1 range
      */
-    private function normalize(?float $value): float
+    private function normalizePercent(?float $value): float
     {
         if ($value === null) {
             return 0.5; // neutral fallback
         }
 
-        if ($value < 0) {
-            return 0.0;
+        return max(0.0, min(1.0, round($value / 100, 4)));
+    }
+
+    private function deliveryComplianceSignal(?string $bookingStatus): float
+    {
+        return match ($bookingStatus) {
+            'completed' => 1.0,
+            'confirmed' => 0.75,
+            'pending' => 0.45,
+            'cancelled' => 0.1,
+            default => 0.5,
+        };
+    }
+
+    private function evidenceStrengthSignal(string $reason): float
+    {
+        $length = mb_strlen($reason);
+
+        return match (true) {
+            $length >= 240 => 0.95,
+            $length >= 120 => 0.8,
+            $length >= 60 => 0.65,
+            $length >= 20 => 0.5,
+            $length > 0 => 0.35,
+            default => 0.2,
+        };
+    }
+
+    private function sentimentSignal(string $reason): float
+    {
+        if ($reason === '') {
+            return 0.5;
         }
 
-        if ($value > 1) {
-            return 1.0;
+        foreach (['scam', 'fraud', 'fake', 'stolen', 'abuse', 'threat'] as $negativeKeyword) {
+            if (str_contains($reason, $negativeKeyword)) {
+                return 0.2;
+            }
         }
 
-        return $value;
+        foreach (['resolved', 'thanks', 'complete', 'delivered', 'fixed'] as $positiveKeyword) {
+            if (str_contains($reason, $positiveKeyword)) {
+                return 0.8;
+            }
+        }
+
+        return 0.5;
     }
 
     /**
@@ -106,6 +155,8 @@ class DisputeAIService
 
     /**
      * Generate structured explanation
+     *
+     * @param array<string, float> $signals
      */
     private function explain(array $signals, string $recommendation): string
     {
@@ -125,10 +176,12 @@ class DisputeAIService
 
     /**
      * Determine strongest contributing signal
+     *
+     * @param array<string, float> $signals
      */
     private function dominantSignal(array $signals): string
     {
         arsort($signals);
-        return array_key_first($signals);
+        return (string) array_key_first($signals);
     }
 }

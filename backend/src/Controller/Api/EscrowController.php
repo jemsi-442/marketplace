@@ -7,7 +7,6 @@ namespace App\Controller\Api;
 use App\Repository\EscrowRepository;
 use App\Entity\User;
 use App\Service\EscrowService;
-use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -20,8 +19,7 @@ class EscrowController extends AbstractController
 {
     public function __construct(
         private readonly EscrowRepository $escrowRepository,
-        private readonly EscrowService $escrowService,
-        private readonly EntityManagerInterface $em
+        private readonly EscrowService $escrowService
     ) {
     }
 
@@ -38,8 +36,12 @@ class EscrowController extends AbstractController
             return $this->json(['error' => 'Escrow not found'], 404);
         }
 
-        $payload = json_decode($request->getContent(), true) ?? [];
-        $releaseToVendor = (bool) ($payload['release_to_vendor'] ?? false);
+        $payload = json_decode($request->getContent(), true);
+        if (!is_array($payload)) {
+            return $this->json(['error' => 'Invalid JSON payload'], 400);
+        }
+
+        $releaseToVendor = ($payload['release_to_vendor'] ?? false) === true;
 
         $this->escrowService->resolveDispute(
             escrow: $escrow,
@@ -54,6 +56,7 @@ class EscrowController extends AbstractController
     #[Route('/list', methods: ['GET'])]
     public function listDisputed(): JsonResponse
     {
+        /** @var array<int, \App\Entity\Escrow> $escrows */
         $escrows = $this->escrowRepository->findBy(['status' => 'DISPUTED']);
         $data = [];
 

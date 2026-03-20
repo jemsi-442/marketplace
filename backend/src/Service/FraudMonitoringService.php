@@ -10,29 +10,44 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class FraudMonitoringService
 {
-    public function __construct(private readonly EntityManagerInterface $em)
-    {
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly RiskEngineService $riskEngineService
+    ) {
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
     public function recordFailedPayment(User $user, array $metadata = []): void
     {
         $this->recordSignal($user, 'FAILED_PAYMENT', 35, $metadata);
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
     public function recordRapidWithdrawalAttempt(User $user, array $metadata = []): void
     {
         $this->recordSignal($user, 'RAPID_WITHDRAWAL_ATTEMPT', 55, $metadata);
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
     public function recordMultipleDisputes(User $user, array $metadata = []): void
     {
         $this->recordSignal($user, 'MULTIPLE_DISPUTES', 45, $metadata);
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     */
     public function recordSignal(User $user, string $signalType, int $severity, array $metadata = []): void
     {
         $signal = new FraudSignal($user, $signalType, $severity, $metadata);
         $this->em->persist($signal);
+        $this->em->flush();
 
         $lookback = (new \DateTimeImmutable())->modify('-24 hours');
 
@@ -62,5 +77,9 @@ class FraudMonitoringService
         $user->setTrustScore(max(0.0, $user->getTrustScore() - $penalty));
 
         $this->em->flush();
+        $this->riskEngineService->analyzeUser($user, [
+            'trigger' => 'fraud_signal',
+            'signal_type' => $signalType,
+        ]);
     }
 }

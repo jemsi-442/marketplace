@@ -8,7 +8,7 @@ use App\Entity\Review;
 use App\Entity\User;
 use App\Service\VendorTrustCalculator;
 use Doctrine\Common\EventSubscriber;
-use Doctrine\ORM\Event\LifecycleEventArgs;
+use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Events;
 
 class ReviewTrustSubscriber implements EventSubscriber
@@ -22,21 +22,18 @@ class ReviewTrustSubscriber implements EventSubscriber
         return [Events::postPersist];
     }
 
-    public function postPersist(LifecycleEventArgs $args): void
+    public function postPersist(PostPersistEventArgs $args): void
     {
         $entity = $args->getObject();
         if (!$entity instanceof Review) {
             return;
         }
 
-        $vendor = $entity->getBooking()?->getService()?->getVendor()?->getUser();
-        if (!$vendor instanceof User) {
-            return;
-        }
+        $vendor = $entity->getBooking()->getService()->getVendor()->getUser();
 
         $this->trustCalculator->recalculateForVendor($vendor, 'REVIEW_CREATED', [
             'review_id' => $entity->getId(),
-            'booking_id' => $entity->getBooking()?->getId(),
+            'booking_id' => $entity->getBooking()->getId(),
         ]);
     }
 }

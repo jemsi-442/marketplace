@@ -1,21 +1,29 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Security;
 
 use App\Entity\Booking;
+use App\Entity\Escrow;
 use App\Entity\User;
 use Symfony\Component\Security\Core\Authorization\Voter\Voter;
 use Symfony\Component\Security\Core\Authorization\Voter\Vote;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 
+/**
+ * @extends Voter<string, Booking>
+ */
 final class BookingVoter extends Voter
 {
     public const VIEW = 'BOOKING_VIEW';
-    public const CANCEL = 'BOOKING_CANCEL';
+    public const UPDATE = 'BOOKING_UPDATE';
+    public const DELETE = 'BOOKING_DELETE';
+    public const REVIEW = 'BOOKING_REVIEW';
 
     protected function supports(string $attribute, mixed $subject): bool
     {
-        if (!in_array($attribute, [self::VIEW, self::CANCEL], true)) {
+        if (!in_array($attribute, [self::VIEW, self::UPDATE, self::DELETE, self::REVIEW], true)) {
             return false;
         }
 
@@ -49,9 +57,11 @@ final class BookingVoter extends Voter
         }
 
         return match ($attribute) {
-            self::VIEW   => $this->canView($booking, $user),
-            self::CANCEL => $this->canCancel($booking, $user),
-            default      => false,
+            self::VIEW => $this->canView($booking, $user),
+            self::UPDATE => $this->canUpdate($booking, $user),
+            self::DELETE => $this->canDelete($booking, $user),
+            self::REVIEW => $this->canReview($booking, $user),
+            default => false,
         };
     }
 
@@ -66,35 +76,52 @@ final class BookingVoter extends Voter
     private function canView(Booking $booking, User $user): bool
     {
         // Client can view own booking
-        if ($booking->getUser()?->getId() === $user->getId()) {
+        if ($booking->getClient()->getId() === $user->getId()) {
             return true;
         }
 
         // Vendor can view booking assigned to their service
-        if ($booking->getService()?->getVendor()?->getUser()?->getId() === $user->getId()) {
+        if ($booking->getService()->getVendor()->getUser()->getId() === $user->getId()) {
             return true;
         }
 
         return false;
     }
 
-    private function canCancel(Booking $booking, User $user): bool
+    private function canUpdate(Booking $booking, User $user): bool
     {
-        // Only client can cancel
-        if ($booking->getUser()?->getId() !== $user->getId()) {
+        return $this->canView($booking, $user);
+    }
+
+    private function canDelete(Booking $booking, User $user): bool
+    {
+        if ($booking->getClient()->getId() !== $user->getId()) {
             return false;
         }
 
-        // Cannot cancel completed or cancelled bookings
-        if (in_array($booking->getStatus(), ['completed', 'cancelled'], true)) {
+        if (in_array($booking->getStatus(), [Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED], true)) {
             return false;
         }
 
-        // Cannot cancel if escrow already released
-        if ($booking->getEscrow()?->getStatus() === 'released') {
+        if ($booking->getEscrow()?->getStatus() === Escrow::STATUS_RELEASED) {
             return false;
         }
 
         return true;
+    }
+
+    private function canReview(Booking $booking, User $user): bool
+    {
+        if ($booking->getClient()->getId() !== $user->getId()) {
+            return false;
+        }
+
+        if ($booking->getStatus() !== Booking::STATUS_COMPLETED) {
+            return false;
+        }
+
+        $vendorId = $booking->getService()->getVendor()->getUser()->getId();
+
+        return $vendorId !== $user->getId();
     }
 }

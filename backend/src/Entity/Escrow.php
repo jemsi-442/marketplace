@@ -42,9 +42,15 @@ class Escrow
     #[ORM\OneToOne(mappedBy: 'escrow', targetEntity: Booking::class)]
     private ?Booking $booking = null;
 
+    /**
+     * @var Collection<int, PartialRelease>
+     */
     #[ORM\OneToMany(mappedBy: 'escrow', targetEntity: PartialRelease::class, cascade: ['persist'], orphanRemoval: true)]
     private Collection $partialReleases;
 
+    /**
+     * @var Collection<int, EscrowMilestone>
+     */
     #[ORM\OneToMany(mappedBy: 'escrow', targetEntity: EscrowMilestone::class, cascade: ['persist'], orphanRemoval: true)]
     private Collection $milestones;
 
@@ -132,11 +138,17 @@ class Escrow
     }
 
 
+    /**
+     * @return Collection<int, PartialRelease>
+     */
     public function getPartialReleases(): Collection
     {
         return $this->partialReleases;
     }
 
+    /**
+     * @return Collection<int, EscrowMilestone>
+     */
     public function getMilestones(): Collection
     {
         return $this->milestones;

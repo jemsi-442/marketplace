@@ -1,0 +1,14 @@
+services:
+    logger:
+        class: Psr\Log\NullLogger
+
+    Psr\Log\LoggerInterface: '@logger'
+
+    App\Tests\Double\FakeSnippeClient:
+        arguments:
+            $em: '@doctrine.orm.entity_manager'
+            $apiKey: '%env(default::SNIPPE_API_KEY)%'
+            $baseUrl: '%env(default::SNIPPE_BASE_URL)%'
+            $webhookSecret: '%env(default::SNIPPE_WEBHOOK_SECRET)%'
+
+    App\Service\SnippeClient: '@App\Tests\Double\FakeSnippeClient'

@@ -25,8 +25,11 @@ class PlatformRevenueLedger
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
-    public function __construct()
+    public function __construct(string $amount = '0.00', string $type = 'FEE', ?string $reference = null)
     {
+        $this->amount = $amount;
+        $this->type = $type;
+        $this->reference = $reference;
         $this->createdAt = new \DateTimeImmutable();
     }
 

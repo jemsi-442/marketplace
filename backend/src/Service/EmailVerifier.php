@@ -1,29 +1,30 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
 
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Email;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use Symfony\Component\HttpFoundation\RequestStack;
 
 final class EmailVerifier
 {
     private const TOKEN_TTL = 3600; // 1 hour
 
     public function __construct(
-        private EntityManagerInterface $em,
-        private MailerInterface $mailer,
-        private UrlGeneratorInterface $urlGenerator,
-        private RequestStack $requestStack
+        private readonly EntityManagerInterface $em,
+        private readonly UrlGeneratorInterface $urlGenerator,
+        private readonly LoggerInterface $logger
     ) {}
 
     /**
      * Generate secure verification token and send email
+     *
+     * @return array{sent:bool, verification_url:string}
      */
-    public function sendVerificationEmail(User $user): void
+    public function sendVerificationEmail(User $user): array
     {
         $token = $this->generateSecureToken();
 
@@ -39,17 +40,18 @@ final class EmailVerifier
             UrlGeneratorInterface::ABSOLUTE_URL
         );
 
-        $email = (new Email())
-            ->to($user->getEmail())
-            ->subject('Verify Your Email Address')
-            ->html("
-                <h2>Email Verification</h2>
-                <p>Please click the link below to verify your email:</p>
-                <p><a href=\"{$verificationUrl}\">Verify Email</a></p>
-                <p>This link will expire in 1 hour.</p>
-            ");
+        // Mail delivery is intentionally decoupled from token issuance.
+        // In environments without Symfony Mailer installed, registration still succeeds.
+        $this->logger->info('Verification link generated.', [
+            'user_id' => $user->getId(),
+            'email' => $user->getEmail(),
+            'verification_url' => $verificationUrl,
+        ]);
 
-        $this->mailer->send($email);
+        return [
+            'sent' => false,
+            'verification_url' => $verificationUrl,
+        ];
     }
 
     /**

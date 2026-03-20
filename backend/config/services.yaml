@@ -33,6 +33,31 @@ parameters:
         historical_similarity: 0.15
     ai.metrics.high_risk_threshold: 70.0
     ai.metrics.snapshot_stale_hours: 30
+    ai.user_risk.thresholds:
+        new_account_days: 7
+        repeated_failed_logins: 3
+        low_trust_score: 60
+        recent_signal_lookback_hours: 24
+    ai.user_risk.weights:
+        new_account: 15
+        repeated_failed_logins: 20
+        low_trust_score: 25
+        recent_signal_count: 4
+        recent_signal_severity_multiplier: 0.35
+    ai.transaction_monitor.thresholds:
+        velocity_window_minutes: 10
+        velocity_count: 5
+        high_velocity_score_boost: 30
+        large_payment_amount_minor: 500000
+        large_payment_score_boost: 20
+        fail_threshold: 80
+        pending_threshold: 60
+    ai.behavior.thresholds:
+        amount_spike_multiplier: 3
+        unusual_hour_gap: 5
+    ai.behavior.weights:
+        amount_spike: 25
+        unusual_hour: 15
     snippe.webhook.max_skew_seconds: 300
 
 services:
@@ -97,6 +122,20 @@ services:
     App\Service\PlatformMetricsHealthService:
         arguments:
             $staleThresholdHours: '%ai.metrics.snapshot_stale_hours%'
+
+    App\Service\RiskEngineService:
+        arguments:
+            $thresholds: '%ai.user_risk.thresholds%'
+            $weights: '%ai.user_risk.weights%'
+
+    App\Service\TransactionMonitorService:
+        arguments:
+            $thresholds: '%ai.transaction_monitor.thresholds%'
+
+    App\Service\BehaviorAnalyzerService:
+        arguments:
+            $thresholds: '%ai.behavior.thresholds%'
+            $weights: '%ai.behavior.weights%'
 
     App\Service\Matching\RuleBasedMatchingStrategy:
         arguments:

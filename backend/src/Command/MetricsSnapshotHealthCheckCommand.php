@@ -21,7 +21,7 @@ class MetricsSnapshotHealthCheckCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $status = $this->metricsHealthService->getHealthStatus();
-        $output->writeln(json_encode($status, JSON_PRETTY_PRINT));
+        $output->writeln(json_encode($status, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
 
         return $status['is_healthy'] ? Command::SUCCESS : Command::FAILURE;
     }

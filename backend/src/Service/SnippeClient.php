@@ -17,6 +17,10 @@ class SnippeClient
     ) {
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     * @return array<string, mixed>
+     */
     public function createCollection(
         string $reference,
         int $amountMinor,
@@ -52,6 +56,10 @@ class SnippeClient
         return $this->request('POST', '/v1/payments', $payload, $idempotencyKey, 'PAYMENT_CREATE', $reference);
     }
 
+    /**
+     * @param array<string, mixed> $metadata
+     * @return array<string, mixed>
+     */
     public function createPayout(
         string $reference,
         int $amountMinor,
@@ -94,6 +102,10 @@ class SnippeClient
         return hash_equals($computed, trim($signature));
     }
 
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
     private function request(
         string $method,
         string $endpoint,
@@ -109,10 +121,17 @@ class SnippeClient
         }
         $url = $base . $endpoint;
         $body = json_encode($payload, JSON_THROW_ON_ERROR);
+        $httpMethod = strtoupper($method);
+
+        if ($httpMethod === '') {
+            throw new \InvalidArgumentException('HTTP method must not be empty.');
+        }
+
+        /** @var non-empty-string $body */
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
-            CURLOPT_CUSTOMREQUEST => strtoupper($method),
+            CURLOPT_CUSTOMREQUEST => $httpMethod,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/json',

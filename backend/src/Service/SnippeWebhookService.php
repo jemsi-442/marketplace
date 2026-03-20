@@ -14,6 +14,9 @@ class SnippeWebhookService
     {
     }
 
+    /**
+     * @param array<string, mixed> $payload
+     */
     public function recordIncoming(
         string $eventId,
         string $externalReference,
@@ -42,7 +45,7 @@ class SnippeWebhookService
 
     public function markProcessed(string $eventId): void
     {
-        if (method_exists($this->em, 'isOpen') && !$this->em->isOpen()) {
+        if (!$this->em->isOpen()) {
             return;
         }
 

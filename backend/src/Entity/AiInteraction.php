@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Entity;
 
 use App\Repository\AiInteractionRepository;
@@ -20,8 +22,8 @@ class AiInteraction
     #[ORM\Column(type: 'text')]
     private string $answer = '';
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $createdAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
 
     public function __construct()
     {
@@ -36,5 +38,5 @@ class AiInteraction
     public function getAnswer(): string { return $this->answer; }
     public function setAnswer(string $answer): self { $this->answer = $answer; return $this; }
 
-    public function getCreatedAt(): \DateTimeInterface { return $this->createdAt; }
+    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }

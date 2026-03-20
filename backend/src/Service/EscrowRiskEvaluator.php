@@ -12,6 +12,10 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class EscrowRiskEvaluator
 {
+    /**
+     * @param array<string, float> $weights
+     * @param array<string, float> $currencyRiskMap
+     */
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly float $highAmountThresholdMinor,
@@ -23,6 +27,9 @@ class EscrowRiskEvaluator
     ) {
     }
 
+    /**
+     * @param array<string, mixed> $context
+     */
     public function evaluateAtCreation(Escrow $escrow, array $context = []): ?EscrowRiskProfile
     {
         try {
@@ -108,6 +115,9 @@ class EscrowRiskEvaluator
         return max(0.0, min(100.0, ($amountMinor / max(1.0, $this->highAmountThresholdMinor)) * 100));
     }
 
+    /**
+     * @param array<string, mixed> $context
+     */
     private function geoRiskFactor(string $currency, array $context): float
     {
         if (isset($context['geo_risk_factor']) && is_numeric($context['geo_risk_factor'])) {

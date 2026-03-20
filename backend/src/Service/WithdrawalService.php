@@ -94,7 +94,11 @@ class WithdrawalService
                 recipientName: sprintf('Vendor %d', $withdrawal->getVendor()->getId())
             );
 
-            $snippePayoutReference = (string) (($response['data']['reference'] ?? '') ?: $fallbackPayoutReference);
+            $responseData = $response['data'] ?? null;
+            $snippeReferenceRaw = is_array($responseData) ? ($responseData['reference'] ?? '') : '';
+            $snippePayoutReference = is_scalar($snippeReferenceRaw) && (string) $snippeReferenceRaw !== ''
+                ? (string) $snippeReferenceRaw
+                : $fallbackPayoutReference;
 
             $this->em->wrapInTransaction(function () use ($withdrawal, $snippePayoutReference, $response): void {
                 $this->em->lock($withdrawal, LockMode::PESSIMISTIC_WRITE);
@@ -119,11 +123,18 @@ class WithdrawalService
         }
     }
 
+    /**
+     * @param array<string, mixed> $payload
+     */
     public function handlePayoutWebhook(array $payload): void
     {
-        $reference = (string) ($payload['reference'] ?? '');
-        $status = strtoupper((string) ($payload['status'] ?? ''));
-        $externalTransactionId = (string) ($payload['transaction_id'] ?? ($payload['id'] ?? ''));
+        $referenceRaw = $payload['reference'] ?? '';
+        $statusRaw = $payload['status'] ?? '';
+        $externalTransactionIdRaw = $payload['transaction_id'] ?? ($payload['id'] ?? '');
+
+        $reference = is_scalar($referenceRaw) ? (string) $referenceRaw : '';
+        $status = strtoupper(is_scalar($statusRaw) ? (string) $statusRaw : '');
+        $externalTransactionId = is_scalar($externalTransactionIdRaw) ? (string) $externalTransactionIdRaw : '';
 
         if ($reference === '' || $status === '') {
             throw new \InvalidArgumentException('Payout webhook missing required fields.');
@@ -155,10 +166,13 @@ class WithdrawalService
                 return;
             }
 
-            $withdrawal->markFailed((string) ($payload['reason'] ?? 'Payout failed'), $payload);
+            $reasonRaw = $payload['reason'] ?? 'Payout failed';
+            $reason = is_scalar($reasonRaw) ? (string) $reasonRaw : 'Payout failed';
+
+            $withdrawal->markFailed($reason, $payload);
             $this->fraudMonitoringService->recordRapidWithdrawalAttempt($withdrawal->getVendor(), [
                 'withdrawal_reference' => $withdrawal->getReference(),
-                'failure_reason' => (string) ($payload['reason'] ?? 'Payout failed'),
+                'failure_reason' => $reason,
             ]);
             $this->vendorWalletService->reverseFailedWithdrawal($withdrawal, 'withdrawal_failed_' . $withdrawal->getReference());
             $this->em->flush();

@@ -55,7 +55,7 @@ class MilestoneDisputeSmokeCommand extends Command
         $milestone = new EscrowMilestone();
         $milestone->setEscrow($escrow);
         $milestone->setTitle('Smoke milestone');
-        $milestone->setAmount(100.00);
+        $milestone->setAmountMinor(10000);
         $milestone->setReleased(true);
         $this->em->persist($milestone);
         $this->em->flush();
@@ -64,7 +64,7 @@ class MilestoneDisputeSmokeCommand extends Command
         $this->milestoneDisputeService->resolveRelease($dispute, $admin);
 
         $this->em->refresh($dispute);
-        $this->em->refresh($milestone);
+       $this->em->refresh($milestone);
 
         $output->writeln(json_encode([
             'dispute_id' => $dispute->getId(),
@@ -72,7 +72,7 @@ class MilestoneDisputeSmokeCommand extends Command
             'admin_decision' => $dispute->getAdminDecision(),
             'milestone_released' => $milestone->isReleased(),
             'escrow_reference' => $escrow->getReference(),
-        ], JSON_PRETTY_PRINT));
+        ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
 
         return Command::SUCCESS;
     }

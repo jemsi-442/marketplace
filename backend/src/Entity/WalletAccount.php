@@ -17,6 +17,7 @@ class WalletAccount
     public const TYPE_ESCROW_LIABILITY = 'ESCROW_LIABILITY';
     public const TYPE_WITHDRAWAL_CLEARING = 'WITHDRAWAL_CLEARING';
     public const TYPE_SNIPPE_SETTLEMENT = 'SNIPPE_SETTLEMENT';
+    public const TYPE_LEGACY_ADJUSTMENT = 'LEGACY_ADJUSTMENT';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

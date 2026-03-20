@@ -14,6 +14,9 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class VendorTrustCalculator
 {
+    /**
+     * @param array<string, float> $weights
+     */
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly array $weights,
@@ -23,6 +26,9 @@ class VendorTrustCalculator
     ) {
     }
 
+    /**
+     * @param array<string, mixed> $context
+     */
     public function recalculateForVendor(User $vendor, string $trigger, array $context = []): VendorTrustProfile
     {
         $completedJobs = $this->countCompletedJobs($vendor);
@@ -171,6 +177,9 @@ class VendorTrustCalculator
         return $result !== null ? (float) $result : 0.0;
     }
 
+    /**
+     * @param array<int, string> $statuses
+     */
     private function countEscrowByStatus(User $vendor, array $statuses): int
     {
         return (int) $this->em->getRepository(Escrow::class)

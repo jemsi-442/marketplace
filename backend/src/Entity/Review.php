@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Entity;
 
 use App\Repository\ReviewRepository;
@@ -17,7 +19,7 @@ class Review
 
     #[ORM\OneToOne(targetEntity: Booking::class)]
     #[ORM\JoinColumn(nullable: false, unique: true)]
-    private ?Booking $booking = null;
+    private Booking $booking;
 
     #[ORM\Column(type: 'integer')]
     #[Assert\Range(min: 1, max: 5)]
@@ -26,8 +28,8 @@ class Review
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $comment = null;
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $createdAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
 
     public function __construct()
     {
@@ -42,7 +44,7 @@ class Review
         return $this->id;
     }
 
-    public function getBooking(): ?Booking
+    public function getBooking(): Booking
     {
         return $this->booking;
     }
@@ -75,12 +77,12 @@ class Review
         return $this;
     }
 
-    public function getCreatedAt(): \DateTimeInterface
+    public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
     }
 
-    public function setCreatedAt(\DateTimeInterface $createdAt): self
+    public function setCreatedAt(\DateTimeImmutable $createdAt): self
     {
         $this->createdAt = $createdAt;
         return $this;

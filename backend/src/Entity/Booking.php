@@ -22,11 +22,11 @@ class Booking
 
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(nullable: false)]
-    private ?User $client = null;
+    private User $client;
 
     #[ORM\ManyToOne(targetEntity: Service::class)]
     #[ORM\JoinColumn(nullable: false)]
-    private ?Service $service = null;
+    private Service $service;
 
     /*
      * Owning side of Escrow relation
@@ -68,7 +68,7 @@ class Booking
         return $this->id;
     }
 
-    public function getClient(): ?User
+    public function getClient(): User
     {
         return $this->client;
     }
@@ -79,7 +79,7 @@ class Booking
         return $this;
     }
 
-    public function getService(): ?Service
+    public function getService(): Service
     {
         return $this->service;
     }
@@ -133,4 +133,3 @@ class Booking
         $this->updatedAt = new \DateTimeImmutable();
     }
 }
-

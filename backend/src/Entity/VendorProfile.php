@@ -17,7 +17,7 @@ class VendorProfile
 
     #[ORM\OneToOne(targetEntity: User::class, inversedBy: 'vendorProfile')]
     #[ORM\JoinColumn(nullable: false)]
-    private ?User $user = null;
+    private User $user;
 
     #[ORM\Column(type: 'string', length: 255)]
     #[Assert\NotBlank]
@@ -40,7 +40,7 @@ class VendorProfile
         return $this->id;
     }
 
-    public function getUser(): ?User
+    public function getUser(): User
     {
         return $this->user;
     }

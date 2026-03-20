@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
@@ -20,8 +22,8 @@ class Wallet
     #[ORM\Column(type: 'string', length: 3)]
     private string $currency = 'USD';
 
-    #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $createdAt;
+    #[ORM\Column(type: 'datetime_immutable')]
+    private \DateTimeImmutable $createdAt;
 
     public function __construct(User $vendor, string $currency = 'USD')
     {
@@ -33,4 +35,5 @@ class Wallet
     public function getId(): ?int { return $this->id; }
     public function getVendor(): User { return $this->vendor; }
     public function getCurrency(): string { return $this->currency; }
+    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 }

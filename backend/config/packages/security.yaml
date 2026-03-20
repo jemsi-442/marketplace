@@ -30,6 +30,9 @@ security:
         - { path: ^/webhooks/snippe, roles: PUBLIC_ACCESS }
         - { path: ^/api/login, roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/refresh, roles: PUBLIC_ACCESS }
+        - { path: ^/api/refresh, roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/verify-email, roles: PUBLIC_ACCESS }
         - { route: snippe_collection_webhook, roles: PUBLIC_ACCESS }
         - { route: snippe_payout_webhook, roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: ROLE_USER }

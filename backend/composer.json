@@ -8,11 +8,11 @@
         "ext-ctype": "*",
         "ext-iconv": "*",
         "api-platform/core": "^4.2",
-        "doctrine/doctrine-bundle": "*",
-        "doctrine/doctrine-migrations-bundle": "*",
-        "doctrine/orm": "*",
-        "firebase/php-jwt": "*",
-        "geoip2/geoip2": "*",
+        "doctrine/doctrine-bundle": "^3.2",
+        "doctrine/doctrine-migrations-bundle": "^4.0",
+        "doctrine/orm": "^3.6",
+        "firebase/php-jwt": "^7.0",
+        "geoip2/geoip2": "^3.3",
         "symfony/console": "8.0.*",
         "symfony/dotenv": "8.0.*",
         "symfony/flex": "^2",
@@ -29,7 +29,8 @@
         "allow-plugins": {
             "php-http/discovery": true,
             "symfony/flex": true,
-            "symfony/runtime": true
+            "symfony/runtime": true,
+            "phpstan/extension-installer": true
         },
         "bump-after-update": true,
         "sort-packages": true
@@ -61,6 +62,38 @@
             "cache:clear": "symfony-cmd",
             "assets:install %PUBLIC_DIR%": "symfony-cmd"
         },
+        "test": [
+            "php bin/phpunit"
+        ],
+        "lint:php": [
+            "bash lint_php.sh"
+        ],
+        "prepare:phpstan-metadata": [
+            "bash prepare_phpstan_metadata.sh"
+        ],
+        "analyze:phpstan": [
+            "@prepare:phpstan-metadata",
+            "php vendor/bin/phpstan analyse --memory-limit=1G"
+        ],
+        "security:audit": [
+            "composer audit --locked --format=plain"
+        ],
+        "test:prepare-db": [
+            "bash prepare_test_db.sh"
+        ],
+        "test:api": [
+            "php bin/phpunit tests/Api"
+        ],
+        "test:api:isolated": [
+            "bash run_isolated_api_tests.sh"
+        ],
+        "quality:fast": [
+            "bash quality_gate.sh"
+        ],
+        "quality:ci": [
+            "@security:audit",
+            "bash quality_gate.sh --isolated"
+        ],
         "post-install-cmd": [
             "@auto-scripts"
         ],
@@ -78,8 +111,16 @@
         }
     },
     "require-dev": {
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-doctrine": "^2.0",
+        "phpstan/phpstan-symfony": "^2.0",
+        "phpunit/phpunit": "^12.5.14",
+        "symfony/browser-kit": "8.0.*",
+        "symfony/css-selector": "8.0.*",
         "symfony/debug-bundle": "8.0.*",
-        "symfony/maker-bundle": "*",
+        "symfony/maker-bundle": "^1.66",
+        "symfony/phpunit-bridge": "8.0.*",
         "symfony/stopwatch": "8.0.*",
         "symfony/web-profiler-bundle": "8.0.*"
     }

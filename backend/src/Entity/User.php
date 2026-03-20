@@ -52,29 +52,29 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'string', length: 64, nullable: true)]
     private ?string $verificationToken = null;
 
-    #[ORM\Column(type: 'string', length: 128, nullable: true)]
-    private ?string $refreshToken = null;
-
     /* =========================
        TRUST & RISK ENGINE
     ========================= */
     #[ORM\Column(type: 'float')]
     private float $trustScore = 100.0;
 
+    #[ORM\Column(type: 'smallint')]
+    private int $fraudRiskScore = 0;
+
     #[ORM\Column(type: 'string', length: 20)]
     private string $riskLevel = 'LOW';
 
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
-    private ?\DateTimeInterface $lastRiskUpdate = null;
+    private ?\DateTimeImmutable $lastRiskUpdate = null;
 
     /* =========================
        TIMESTAMPS
     ========================= */
     #[ORM\Column(type: 'datetime_immutable')]
-    private \DateTimeInterface $createdAt;
+    private \DateTimeImmutable $createdAt;
 
     #[ORM\Column(type: 'datetime_immutable')]
-    private \DateTimeInterface $updatedAt;
+    private \DateTimeImmutable $updatedAt;
 
     /* =========================
        VENDOR PROFILE RELATION
@@ -91,6 +91,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->createdAt = new \DateTimeImmutable();
         $this->updatedAt = new \DateTimeImmutable();
         $this->trustScore = 100.0;
+        $this->fraudRiskScore = 0;
         $this->riskLevel = 'LOW';
     }
 
@@ -192,17 +193,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->verificationToken;
     }
 
-    public function setRefreshToken(?string $token): self
-    {
-        $this->refreshToken = $token;
-        return $this;
-    }
-
-    public function getRefreshToken(): ?string
-    {
-        return $this->refreshToken;
-    }
-
     /* =========================
        TRUST ENGINE
     ========================= */
@@ -215,8 +205,22 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
         $score = max(0, min(100, $score));
         $this->trustScore = round($score, 2);
-        $this->updateRiskLevel();
+        $this->refreshCompositeRiskLevel();
         $this->lastRiskUpdate = new \DateTimeImmutable();
+        return $this;
+    }
+
+    public function getFraudRiskScore(): int
+    {
+        return $this->fraudRiskScore;
+    }
+
+    public function setFraudRiskScore(int $score): self
+    {
+        $this->fraudRiskScore = max(0, min(100, $score));
+        $this->refreshCompositeRiskLevel();
+        $this->lastRiskUpdate = new \DateTimeImmutable();
+
         return $this;
     }
 
@@ -225,33 +229,71 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->riskLevel;
     }
 
-    public function getLastRiskUpdate(): ?\DateTimeInterface
+    public function getLastRiskUpdate(): ?\DateTimeImmutable
     {
         return $this->lastRiskUpdate;
     }
 
-    private function updateRiskLevel(): void
+    private function refreshCompositeRiskLevel(): void
+    {
+        $trustLevel = $this->resolveTrustRiskLevel();
+        $fraudLevel = $this->resolveFraudRiskLevel();
+
+        $severityMap = [
+            'LOW' => 1,
+            'MEDIUM' => 2,
+            'HIGH' => 3,
+            'CRITICAL' => 4,
+        ];
+
+        $this->riskLevel = ($severityMap[$fraudLevel] ?? 1) > ($severityMap[$trustLevel] ?? 1)
+            ? $fraudLevel
+            : $trustLevel;
+    }
+
+    private function resolveTrustRiskLevel(): string
     {
         if ($this->trustScore >= 80) {
-            $this->riskLevel = 'LOW';
-        } elseif ($this->trustScore >= 60) {
-            $this->riskLevel = 'MEDIUM';
-        } elseif ($this->trustScore >= 40) {
-            $this->riskLevel = 'HIGH';
-        } else {
-            $this->riskLevel = 'CRITICAL';
+            return 'LOW';
         }
+
+        if ($this->trustScore >= 60) {
+            return 'MEDIUM';
+        }
+
+        if ($this->trustScore >= 40) {
+            return 'HIGH';
+        }
+
+        return 'CRITICAL';
+    }
+
+    private function resolveFraudRiskLevel(): string
+    {
+        if ($this->fraudRiskScore >= 80) {
+            return 'CRITICAL';
+        }
+
+        if ($this->fraudRiskScore >= 60) {
+            return 'HIGH';
+        }
+
+        if ($this->fraudRiskScore >= 35) {
+            return 'MEDIUM';
+        }
+
+        return 'LOW';
     }
 
     /* =========================
        TIMESTAMPS
     ========================= */
-    public function getCreatedAt(): \DateTimeInterface
+    public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
     }
 
-    public function getUpdatedAt(): \DateTimeInterface
+    public function getUpdatedAt(): \DateTimeImmutable
     {
         return $this->updatedAt;
     }
@@ -284,8 +326,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /* =========================
        SECURITY INTERFACE
     ========================= */
+    /**
+     * @return non-empty-string
+     */
     public function getUserIdentifier(): string
     {
+        if ($this->email === '') {
+            throw new \LogicException('User email must not be empty.');
+        }
+
         return $this->email;
     }
 

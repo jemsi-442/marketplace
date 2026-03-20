@@ -15,10 +15,11 @@ class UserBehaviorProfile
     private ?int $id = null;
 
     #[ORM\OneToOne(targetEntity: User::class)]
-    private User $user;
+    #[ORM\JoinColumn(nullable: false)]
+    private ?User $user = null;
 
-    #[ORM\Column(nullable: true)]
-    private ?float $avgTransactionAmount = 0.0;
+    #[ORM\Column(type: 'bigint', nullable: true)]
+    private ?int $avgTransactionAmountMinor = 0;
 
     #[ORM\Column(nullable: true)]
     private ?int $avgDailyTransactions = 0;
@@ -42,7 +43,7 @@ class UserBehaviorProfile
         return $this->id;
     }
 
-    public function getUser(): User
+    public function getUser(): ?User
     {
         return $this->user;
     }
@@ -54,17 +55,41 @@ class UserBehaviorProfile
         return $this;
     }
 
-    public function getAvgTransactionAmount(): float
+    public function getAvgTransactionAmountMinor(): int
     {
-        return $this->avgTransactionAmount ?? 0.0;
+        return $this->avgTransactionAmountMinor ?? 0;
     }
 
-    public function setAvgTransactionAmount(?float $avgTransactionAmount): self
+    public function setAvgTransactionAmountMinor(?int $avgTransactionAmountMinor): self
     {
-        $this->avgTransactionAmount = $avgTransactionAmount;
+        if ($avgTransactionAmountMinor !== null && $avgTransactionAmountMinor < 0) {
+            throw new \InvalidArgumentException('Average transaction amount minor must be zero or positive.');
+        }
+
+        $this->avgTransactionAmountMinor = $avgTransactionAmountMinor;
         $this->updatedAt = new \DateTime();
 
         return $this;
+    }
+
+    /**
+     * Temporary compatibility wrapper for legacy callers using major units.
+     */
+    public function getAvgTransactionAmount(): float
+    {
+        return $this->getAvgTransactionAmountMinor() / 100;
+    }
+
+    /**
+     * Temporary compatibility wrapper for legacy callers using major units.
+     */
+    public function setAvgTransactionAmount(?float $avgTransactionAmount): self
+    {
+        if ($avgTransactionAmount === null) {
+            return $this->setAvgTransactionAmountMinor(null);
+        }
+
+        return $this->setAvgTransactionAmountMinor((int) round($avgTransactionAmount * 100));
     }
 
     public function getAvgDailyTransactions(): int

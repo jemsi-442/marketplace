@@ -59,8 +59,11 @@ class VendorProfileController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Invalid JSON payload'], 400);
+        }
 
-        if (!isset($data['companyName'])) {
+        if (!isset($data['companyName']) || !is_string($data['companyName']) || $data['companyName'] === '') {
             return $this->json([
                 'error' => 'companyName is required'
             ], 400);
@@ -68,10 +71,10 @@ class VendorProfileController extends AbstractController
 
         $profile = new VendorProfile();
         $profile->setUser($user);
-        $profile->setCompanyName((string) $data['companyName']);
-        $profile->setBio(isset($data['bio']) ? (string) $data['bio'] : null);
-        $profile->setWebsite(isset($data['website']) ? (string) $data['website'] : null);
-        $profile->setPortfolioLink(isset($data['portfolioLink']) ? (string) $data['portfolioLink'] : null);
+        $profile->setCompanyName($data['companyName']);
+        $profile->setBio(isset($data['bio']) && is_string($data['bio']) ? $data['bio'] : null);
+        $profile->setWebsite(isset($data['website']) && is_string($data['website']) ? $data['website'] : null);
+        $profile->setPortfolioLink(isset($data['portfolioLink']) && is_string($data['portfolioLink']) ? $data['portfolioLink'] : null);
 
         $em->persist($profile);
         $em->flush();
@@ -100,8 +103,11 @@ class VendorProfileController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Invalid JSON payload'], 400);
+        }
 
-        if (isset($data['companyName'])) {
+        if (isset($data['companyName']) && is_string($data['companyName']) && $data['companyName'] !== '') {
             $profile->setCompanyName((string) $data['companyName']);
         }
 

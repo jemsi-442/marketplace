@@ -16,19 +16,25 @@ final class RegisterController extends AbstractController
         AuthService $auth
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
-
-        if (!$data || !isset($data['email'], $data['password'], $data['type'])) {
+        if (!is_array($data)) {
             return $this->json(['error' => 'Invalid payload'], 400);
         }
 
-        $role = match ($data['type']) {
+        $email = $data['email'] ?? null;
+        $password = $data['password'] ?? null;
+        $type = $data['type'] ?? null;
+        if (!is_string($email) || !is_string($password) || !is_string($type) || $email === '' || $password === '' || $type === '') {
+            return $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $role = match ($type) {
             'vendor' => 'ROLE_VENDOR',
             default => 'ROLE_USER',
         };
 
         try {
             return $this->json(
-                $auth->register($data['email'], $data['password'], $role),
+                $auth->register($email, $password, $role),
                 201
             );
         } catch (\DomainException $e) {

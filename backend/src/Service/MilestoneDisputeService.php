@@ -38,8 +38,10 @@ class MilestoneDisputeService
             $this->em->persist($dispute);
             $this->em->flush();
 
+            $escrow = $milestone->getEscrow();
+
             $this->auditLogger->log(
-                escrow: $milestone->getEscrow(),
+                escrow: $escrow,
                 action: 'MILESTONE_DISPUTE_OPENED',
                 actor: $openedBy,
                 metadata: [
@@ -70,13 +72,16 @@ class MilestoneDisputeService
 
             $this->em->flush();
 
+            $escrow = $milestone->getEscrow();
+
             $this->auditLogger->log(
-                escrow: $milestone->getEscrow(),
+                escrow: $escrow,
                 action: 'MILESTONE_DISPUTE_RESOLVED_RELEASE',
                 actor: $admin,
                 metadata: [
                     'milestone_id' => $milestone->getId(),
-                    'amount' => $milestone->getAmount(),
+                    'amount_minor' => $milestone->getAmountMinor(),
+                    'currency' => $escrow->getCurrency(),
                 ]
             );
         });
@@ -100,18 +105,24 @@ class MilestoneDisputeService
 
             $this->em->flush();
 
+            $escrow = $milestone->getEscrow();
+
             $this->auditLogger->log(
-                escrow: $milestone->getEscrow(),
+                escrow: $escrow,
                 action: 'MILESTONE_DISPUTE_RESOLVED_REFUND',
                 actor: $admin,
                 metadata: [
                     'milestone_id' => $milestone->getId(),
-                    'amount' => $milestone->getAmount(),
+                    'amount_minor' => $milestone->getAmountMinor(),
+                    'currency' => $escrow->getCurrency(),
                 ]
             );
         });
     }
 
+    /**
+     * @return array{recommendation: string, confidence: float, reason: string, dispute_id: int|null}
+     */
     public function getAiRecommendation(MilestoneDispute $dispute): array
     {
         return [
