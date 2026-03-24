@@ -3,9 +3,11 @@
 namespace App\Controller;
 
 use App\Entity\Message;
+use App\Entity\Notification;
 use App\Entity\User;
 use App\Repository\MessageRepository;
 use App\Repository\UserRepository;
+use App\Service\NotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -21,7 +23,8 @@ class MessageController extends AbstractController
     public function send(
         Request $request,
         EntityManagerInterface $em,
-        UserRepository $userRepo
+        UserRepository $userRepo,
+        NotificationService $notificationService
     ): JsonResponse {
         $sender = $this->getUser();
         if (!$sender instanceof User) {
@@ -53,6 +56,12 @@ class MessageController extends AbstractController
 
         $em->persist($message);
         $em->flush();
+        $notificationService->notify(
+            $receiver,
+            'New message',
+            sprintf('You received a new message from %s.', $sender->getEmail()),
+            Notification::CATEGORY_MESSAGE
+        );
 
         return $this->json([
             'message' => 'Message sent successfully',

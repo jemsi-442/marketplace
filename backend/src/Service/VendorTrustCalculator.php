@@ -7,9 +7,11 @@ namespace App\Service;
 use App\Entity\Booking;
 use App\Entity\Dispute;
 use App\Entity\Escrow;
+use App\Entity\Notification;
 use App\Entity\Review;
 use App\Entity\User;
 use App\Entity\VendorTrustProfile;
+use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 class VendorTrustCalculator
@@ -19,6 +21,8 @@ class VendorTrustCalculator
      */
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly NotificationService $notificationService,
+        private readonly UserRepository $userRepository,
         private readonly array $weights,
         private readonly int $volumeCapMinor,
         private readonly float $mediumRiskThreshold,
@@ -62,6 +66,8 @@ class VendorTrustCalculator
         $riskLevel = $this->resolveRiskLevel($score);
 
         $profile = $this->em->getRepository(VendorTrustProfile::class)->findOneBy(['vendor' => $vendor]);
+        $previousRiskLevel = $profile instanceof VendorTrustProfile ? $profile->getRiskLevel() : null;
+        $previousTrustScore = $profile instanceof VendorTrustProfile ? $profile->getCalculatedTrustScore() : null;
         if (!$profile instanceof VendorTrustProfile) {
             $profile = new VendorTrustProfile($vendor);
             $this->em->persist($profile);
@@ -86,6 +92,14 @@ class VendorTrustCalculator
 
         // Keep User trust/risk in sync with profile score for existing risk engine hooks.
         $vendor->setTrustScore($score);
+        $this->notifyAdminsOnRiskEscalation(
+            $vendor,
+            $profile,
+            $trigger,
+            $context,
+            $previousRiskLevel,
+            $previousTrustScore
+        );
 
         $this->em->flush();
 
@@ -127,6 +141,58 @@ class VendorTrustCalculator
         }
 
         return VendorTrustProfile::RISK_HIGH;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function notifyAdminsOnRiskEscalation(
+        User $vendor,
+        VendorTrustProfile $profile,
+        string $trigger,
+        array $context,
+        ?string $previousRiskLevel,
+        ?float $previousTrustScore
+    ): void {
+        $severityMap = [
+            VendorTrustProfile::RISK_LOW => 1,
+            VendorTrustProfile::RISK_MEDIUM => 2,
+            VendorTrustProfile::RISK_HIGH => 3,
+        ];
+
+        $currentLevel = $profile->getRiskLevel();
+        $currentSeverity = $severityMap[$currentLevel] ?? 1;
+        $previousSeverity = $severityMap[$previousRiskLevel ?? VendorTrustProfile::RISK_LOW] ?? 1;
+
+        if ($currentLevel !== VendorTrustProfile::RISK_HIGH || $currentSeverity <= $previousSeverity) {
+            return;
+        }
+
+        $admins = $this->userRepository->findAdmins();
+        if ($admins === []) {
+            return;
+        }
+
+        $disputes = $profile->getDisputeCount();
+        $refundRatio = round($profile->getRefundRatio() * 100, 2);
+        $previousScore = $previousTrustScore !== null ? round($previousTrustScore, 2) : null;
+        $message = sprintf(
+            'Vendor %s escalated to HIGH trust risk at score %.2f via %s. Disputes: %d, refund ratio: %.2f%%%s',
+            $vendor->getEmail(),
+            $profile->getCalculatedTrustScore(),
+            strtoupper($trigger),
+            $disputes,
+            $refundRatio,
+            $previousScore !== null ? sprintf(', previous score: %.2f.', $previousScore) : '.'
+        );
+
+        $this->notificationService->notifyMany(
+            $admins,
+            'Vendor trust escalation',
+            $message,
+            Notification::CATEGORY_RISK,
+            false
+        );
     }
 
     private function countCompletedJobs(User $vendor): int

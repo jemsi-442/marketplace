@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Controller\Api;
 
 use App\Entity\Booking;
+use App\Entity\Notification;
 use App\Entity\Service;
 use App\Entity\User;
 use App\Security\BookingVoter;
 use App\Service\EscrowService;
+use App\Service\NotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,8 +22,10 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('IS_AUTHENTICATED_FULLY')]
 final class BookingController extends AbstractController
 {
-    public function __construct(private readonly EscrowService $escrowService)
-    {
+    public function __construct(
+        private readonly EscrowService $escrowService,
+        private readonly NotificationService $notificationService
+    ) {
     }
 
     /**
@@ -126,6 +130,13 @@ final class BookingController extends AbstractController
         $em->persist($booking);
         $em->flush();
 
+        $this->notificationService->notifyMany(
+            [$user, $service->getVendor()->getUser()],
+            'Booking created',
+            sprintf('Booking #%d is now pending for service "%s".', $booking->getId(), $service->getTitle()),
+            Notification::CATEGORY_ESCROW
+        );
+
         return $this->json([
             'message' => 'Booking created successfully',
             'booking_id' => $booking->getId(),
@@ -191,6 +202,13 @@ final class BookingController extends AbstractController
         $service = $booking->getService();
         $escrow = $this->escrowService->createEscrow($booking, $user, $service->getPriceCents(), 'TZS');
 
+        $this->notificationService->notifyMany(
+            [$user, $service->getVendor()->getUser()],
+            'Escrow created',
+            sprintf('Escrow %s has been opened for booking #%d.', $escrow->getReference(), $booking->getId()),
+            Notification::CATEGORY_ESCROW
+        );
+
         return $this->json([
             'message' => 'Escrow created successfully',
             'escrow' => [
@@ -221,6 +239,12 @@ final class BookingController extends AbstractController
         }
 
         $this->escrowService->releaseByClient($escrow, $user);
+        $this->notificationService->notifyMany(
+            [$user, $escrow->getVendor()],
+            'Escrow released',
+            sprintf('Escrow %s has been released to the vendor.', $escrow->getReference()),
+            Notification::CATEGORY_ESCROW
+        );
 
         return $this->json([
             'message' => 'Escrow released successfully',
@@ -256,6 +280,12 @@ final class BookingController extends AbstractController
             'reason' => $reason,
             'source' => 'CLIENT_DASHBOARD',
         ]);
+        $this->notificationService->notifyMany(
+            [$user, $escrow->getVendor()],
+            'Escrow dispute opened',
+            sprintf('Escrow %s is now under dispute review.', $escrow->getReference()),
+            Notification::CATEGORY_ESCROW
+        );
 
         return $this->json([
             'message' => 'Escrow dispute opened',

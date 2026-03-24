@@ -12,6 +12,12 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'notification')]
 class Notification
 {
+    public const CATEGORY_PLATFORM = 'platform';
+    public const CATEGORY_FINANCE = 'finance';
+    public const CATEGORY_ESCROW = 'escrow';
+    public const CATEGORY_MESSAGE = 'message';
+    public const CATEGORY_RISK = 'risk';
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'integer')]
@@ -28,6 +34,9 @@ class Notification
     #[ORM\Column(type: 'text')]
     #[Assert\NotBlank]
     private string $message = '';
+
+    #[ORM\Column(type: 'string', length: 32, options: ['default' => self::CATEGORY_PLATFORM])]
+    private string $category = self::CATEGORY_PLATFORM;
 
     #[ORM\Column(type: 'boolean')]
     private bool $isRead = false;
@@ -51,6 +60,9 @@ class Notification
 
     public function getMessage(): string { return $this->message; }
     public function setMessage(string $message): self { $this->message = $message; return $this; }
+
+    public function getCategory(): string { return $this->category; }
+    public function setCategory(string $category): self { $this->category = $category; return $this; }
 
     public function getIsRead(): bool { return $this->isRead; }
     public function setIsRead(bool $isRead): self { $this->isRead = $isRead; return $this; }

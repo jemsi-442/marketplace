@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Entity\Notification;
 use App\Repository\EscrowRepository;
 use App\Service\EscrowService;
+use App\Service\NotificationService;
 use App\Service\SnippeWebhookProcessor;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,7 +22,8 @@ class PaymentController extends AbstractController
     public function __construct(
         private readonly EscrowService $escrowService,
         private readonly EscrowRepository $escrowRepository,
-        private readonly SnippeWebhookProcessor $webhookProcessor
+        private readonly SnippeWebhookProcessor $webhookProcessor,
+        private readonly NotificationService $notificationService
     ) {
     }
 
@@ -58,6 +61,12 @@ class PaymentController extends AbstractController
         }
 
         $response = $this->escrowService->initiateCollectionPayment($escrow, $msisdn, $provider, $callbackUrl);
+        $this->notificationService->notify(
+            $user,
+            'Collection initiated',
+            sprintf('A collection session has been created for escrow %s via %s.', $escrow->getReference(), strtoupper($provider)),
+            Notification::CATEGORY_FINANCE
+        );
 
         return $this->json([
             'message' => 'Collection session created',

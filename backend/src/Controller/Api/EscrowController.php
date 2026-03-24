@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
+use App\Entity\Notification;
 use App\Repository\EscrowRepository;
 use App\Entity\User;
 use App\Service\EscrowService;
+use App\Service\NotificationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -19,7 +21,8 @@ class EscrowController extends AbstractController
 {
     public function __construct(
         private readonly EscrowRepository $escrowRepository,
-        private readonly EscrowService $escrowService
+        private readonly EscrowService $escrowService,
+        private readonly NotificationService $notificationService
     ) {
     }
 
@@ -48,6 +51,14 @@ class EscrowController extends AbstractController
             admin: $admin,
             releaseToVendor: $releaseToVendor,
             metadata: $payload
+        );
+        $this->notificationService->notifyMany(
+            [$escrow->getClient(), $escrow->getVendor()],
+            'Escrow dispute resolved',
+            $releaseToVendor
+                ? sprintf('Escrow %s was resolved in favor of the vendor.', $escrow->getReference())
+                : sprintf('Escrow %s was resolved with a client refund.', $escrow->getReference()),
+            Notification::CATEGORY_ESCROW
         );
 
         return $this->json(['message' => 'Escrow dispute resolved']);

@@ -6,7 +6,9 @@ namespace App\Service;
 
 use App\Entity\FraudSignal;
 use App\Entity\FraudRisk;
+use App\Entity\Notification;
 use App\Entity\User;
+use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 class RiskEngineService
@@ -17,6 +19,8 @@ class RiskEngineService
      */
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly NotificationService $notificationService,
+        private readonly UserRepository $userRepository,
         private readonly array $thresholds = [],
         private readonly array $weights = []
     ) {
@@ -27,6 +31,7 @@ class RiskEngineService
      */
     public function analyzeUser(User $user, array $context = [], bool $flush = true): int
     {
+        $previousRisk = $this->loadLatestRisk($user);
         $score = 0;
         $reasons = [];
         $metadata = [
@@ -90,6 +95,7 @@ class RiskEngineService
             $score,
             $reasons === [] ? 'No elevated risk signals' : implode(', ', $reasons),
             $metadata,
+            $previousRisk,
             $flush
         );
 
@@ -124,13 +130,80 @@ class RiskEngineService
     /**
      * @param array<string, mixed> $metadata
      */
-    private function logRisk(User $user, int $score, string $reason, array $metadata, bool $flush): void
+    private function logRisk(
+        User $user,
+        int $score,
+        string $reason,
+        array $metadata,
+        ?FraudRisk $previousRisk,
+        bool $flush
+    ): void
     {
         $risk = new FraudRisk($user, $score, $reason, $metadata);
         $this->em->persist($risk);
+        $this->notifyAdminsOnEscalation($user, $risk, $previousRisk, $metadata);
 
         if ($flush) {
             $this->em->flush();
         }
+    }
+
+    private function loadLatestRisk(User $user): ?FraudRisk
+    {
+        $result = $this->em->getRepository(FraudRisk::class)
+            ->createQueryBuilder('fr')
+            ->where('fr.user = :user')
+            ->setParameter('user', $user)
+            ->orderBy('fr.createdAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $result instanceof FraudRisk ? $result : null;
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    private function notifyAdminsOnEscalation(User $user, FraudRisk $risk, ?FraudRisk $previousRisk, array $metadata): void
+    {
+        $newLevel = $risk->getRiskLevel();
+        $previousLevel = $previousRisk?->getRiskLevel();
+        $severityMap = [
+            FraudRisk::LEVEL_LOW => 1,
+            FraudRisk::LEVEL_MEDIUM => 2,
+            FraudRisk::LEVEL_HIGH => 3,
+            FraudRisk::LEVEL_CRITICAL => 4,
+        ];
+
+        $newSeverity = $severityMap[$newLevel] ?? 1;
+        $previousSeverity = $severityMap[$previousLevel ?? FraudRisk::LEVEL_LOW] ?? 1;
+
+        if ($newSeverity < ($severityMap[FraudRisk::LEVEL_HIGH] ?? 3) || $newSeverity <= $previousSeverity) {
+            return;
+        }
+
+        $admins = $this->userRepository->findAdmins();
+        if ($admins === []) {
+            return;
+        }
+
+        $trigger = isset($metadata['trigger']) && is_string($metadata['trigger']) ? $metadata['trigger'] : 'manual';
+        $title = $newLevel === FraudRisk::LEVEL_CRITICAL ? 'Critical risk escalation' : 'High risk user flagged';
+        $message = sprintf(
+            'User %s escalated to %s risk with score %d via %s.',
+            $user->getEmail(),
+            $newLevel,
+            $risk->getScore(),
+            strtoupper($trigger)
+        );
+
+        $this->notificationService->notifyMany(
+            $admins,
+            $title,
+            $message,
+            Notification::CATEGORY_RISK,
+            false
+        );
     }
 }

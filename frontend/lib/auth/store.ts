@@ -74,6 +74,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'marketplace-auth',
+      skipHydration: true,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         token: state.token,

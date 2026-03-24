@@ -1,6 +1,6 @@
 # Frontend Workspace
 
-Next.js enterprise SaaS shell for the Symfony marketplace backend.
+Next.js frontend for the WOLFIX DIGITAL AGENCY marketplace, connected to the Symfony fintech backend.
 
 ## Stack
 

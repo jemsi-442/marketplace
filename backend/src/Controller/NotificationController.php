@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controller;
 
 use App\Entity\Notification;
@@ -31,6 +33,7 @@ class NotificationController extends AbstractController
                 'id' => $n->getId(),
                 'title' => $n->getTitle(),
                 'message' => $n->getMessage(),
+                'category' => $n->getCategory(),
                 'isRead' => $n->getIsRead(),
                 'createdAt' => $n->getCreatedAt()->format('Y-m-d H:i:s'),
             ];

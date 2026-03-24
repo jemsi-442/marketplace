@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
+use App\Entity\Notification;
 use App\Entity\User;
 use App\Entity\WithdrawalRequest;
+use App\Service\NotificationService;
 use App\Service\WithdrawalService;
 use App\Service\VendorWalletService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -21,7 +23,8 @@ class WithdrawalController extends AbstractController
     public function __construct(
         private readonly WithdrawalService $withdrawalService,
         private readonly EntityManagerInterface $em,
-        private readonly VendorWalletService $vendorWalletService
+        private readonly VendorWalletService $vendorWalletService,
+        private readonly NotificationService $notificationService
     ) {
     }
 
@@ -124,6 +127,13 @@ class WithdrawalController extends AbstractController
             return $this->json(['error' => $e->getMessage()], 422);
         }
 
+        $this->notificationService->notify(
+            $vendor,
+            'Withdrawal requested',
+            sprintf('Withdrawal %s has been submitted for %d %s.', $withdrawal->getReference(), $withdrawal->getAmountMinor(), $withdrawal->getCurrency()),
+            Notification::CATEGORY_FINANCE
+        );
+
         return $this->json([
             'id' => $withdrawal->getId(),
             'reference' => $withdrawal->getReference(),
@@ -155,6 +165,12 @@ class WithdrawalController extends AbstractController
             : '/api/payments/webhooks/payout';
 
         $this->withdrawalService->approve($withdrawal, $admin, $callbackUrl);
+        $this->notificationService->notify(
+            $withdrawal->getVendor(),
+            'Withdrawal approved',
+            sprintf('Withdrawal %s has been approved and sent for payout processing.', $withdrawal->getReference()),
+            Notification::CATEGORY_FINANCE
+        );
 
         return $this->json(['message' => 'Withdrawal approved and payout initiated']);
     }

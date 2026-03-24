@@ -101,6 +101,8 @@ services:
 
     App\Service\VendorTrustCalculator:
         arguments:
+            $notificationService: '@App\Service\NotificationService'
+            $userRepository: '@App\Repository\UserRepository'
             $weights: '%ai.trust.weights%'
             $volumeCapMinor: '%ai.trust.volume_cap_minor%'
             $mediumRiskThreshold: '%ai.trust.medium_risk_threshold%'

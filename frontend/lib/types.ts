@@ -90,6 +90,8 @@ export interface ServiceListItem {
   vendor_user_id: number;
 }
 
+export type ServiceDetail = ServiceListItem;
+
 export interface ServiceUpsertInput {
   title: string;
   description?: string | null;
@@ -194,6 +196,7 @@ export interface NotificationRecord {
   id: number;
   title: string;
   message: string;
+  category?: string;
   isRead: boolean;
   createdAt: string;
 }
@@ -211,4 +214,48 @@ export interface MessageRecord {
 export interface MessageSendInput {
   receiverId: number;
   content: string;
+}
+
+export interface VendorTrustSummary {
+  vendor_id: number;
+  vendor_email: string;
+  completed_jobs_count: number;
+  dispute_count: number;
+  average_rating: number;
+  escrow_release_ratio: number;
+  on_time_delivery_ratio: number;
+  refund_ratio: number;
+  total_volume_minor: number;
+  calculated_trust_score: number;
+  risk_level: string;
+  updated_at: string;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface AdminRiskOverview {
+  summary: {
+    users_monitored: number;
+    medium_or_above_users: number;
+    high_or_critical_users: number;
+    critical_users: number;
+    vendors_monitored: number;
+  };
+  latest_fraud_risks: Array<{
+    id: number;
+    user_id: number;
+    email: string;
+    score: number;
+    risk_level: string;
+    reason: string;
+    created_at: string;
+  }>;
+  vendor_trust_watchlist: VendorTrustSummary[];
+}
+
+export interface AdminUserRecord {
+  id: number;
+  email: string;
+  roles: string[];
+  is_verified: boolean;
+  is_locked: boolean;
 }

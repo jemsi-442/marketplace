@@ -2,6 +2,8 @@ import { appConfig } from '@/lib/config';
 import type {
   AdminMetricsHealth,
   AdminMetricsTrendResponse,
+  AdminRiskOverview,
+  AdminUserRecord,
   BookingCreateResponse,
   BookingRecord,
   CollectionGatewayResponse,
@@ -16,12 +18,14 @@ import type {
   ReviewCreateInput,
   ReviewRecord,
   ServiceListItem,
+  ServiceDetail,
   ServiceUpsertInput,
   WithdrawalRecord,
   WithdrawalRequestInput,
   WithdrawalSummary,
   VendorProfile,
   VendorProfileInput,
+  VendorTrustSummary,
 } from '@/lib/types';
 
 interface RequestOptions extends RequestInit {
@@ -69,6 +73,9 @@ export const apiClient = {
   getServices(token?: string | null): Promise<ServiceListItem[]> {
     return request<ServiceListItem[]>('/api/services', { token });
   },
+  getService(serviceId: number, token?: string | null): Promise<ServiceDetail> {
+    return request<ServiceDetail>(`/api/services/${serviceId}`, { token });
+  },
   createService(token: string, input: ServiceUpsertInput): Promise<{ id: number; message: string }> {
     return request<{ id: number; message: string }>('/api/services', {
       method: 'POST',
@@ -91,6 +98,9 @@ export const apiClient = {
   },
   getBookings(token: string): Promise<BookingRecord[]> {
     return request<BookingRecord[]>('/api/bookings', { token });
+  },
+  getBooking(token: string, bookingId: number): Promise<BookingRecord> {
+    return request<BookingRecord>(`/api/bookings/${bookingId}`, { token });
   },
   createBooking(token: string, serviceId: number): Promise<BookingCreateResponse> {
     return request<BookingCreateResponse>('/api/bookings', {
@@ -146,6 +156,9 @@ export const apiClient = {
   getVendorProfile(token: string): Promise<VendorProfile> {
     return request<VendorProfile>('/api/vendor/profile', { token });
   },
+  getVendorTrust(token: string): Promise<VendorTrustSummary> {
+    return request<VendorTrustSummary>('/api/vendor/trust', { token });
+  },
   createVendorProfile(token: string, input: VendorProfileInput): Promise<{ message: string; id: number }> {
     return request<{ message: string; id: number }>('/api/vendor/profile', {
       method: 'POST',
@@ -168,6 +181,24 @@ export const apiClient = {
   },
   getDisputedEscrows(token: string): Promise<DisputedEscrowRecord[]> {
     return request<DisputedEscrowRecord[]>('/api/admin/escrow/list', { token });
+  },
+  getAdminUsers(token: string): Promise<AdminUserRecord[]> {
+    return request<AdminUserRecord[]>('/api/admin/users', { token });
+  },
+  lockAdminUser(token: string, userId: number): Promise<{ message: string }> {
+    return request<{ message: string }>(`/api/admin/users/${userId}/lock`, {
+      method: 'POST',
+      token,
+    });
+  },
+  unlockAdminUser(token: string, userId: number): Promise<{ message: string }> {
+    return request<{ message: string }>(`/api/admin/users/${userId}/unlock`, {
+      method: 'POST',
+      token,
+    });
+  },
+  getAdminRiskOverview(token: string): Promise<AdminRiskOverview> {
+    return request<AdminRiskOverview>('/api/admin/risk/overview', { token });
   },
   resolveEscrow(token: string, escrowId: number, releaseToVendor: boolean): Promise<{ message: string }> {
     return request<{ message: string }>(`/api/admin/escrow/resolve/${escrowId}`, {

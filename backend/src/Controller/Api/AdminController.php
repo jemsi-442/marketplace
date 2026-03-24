@@ -1,10 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controller\Api;
 
+use App\Entity\Notification;
 use App\Entity\User;
 use App\Entity\VendorProfile;
 use App\Entity\Booking;
+use App\Service\NotificationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -15,6 +19,11 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ADMIN')]
 final class AdminController extends AbstractController
 {
+    public function __construct(
+        private readonly NotificationService $notificationService
+    ) {
+    }
+
     #[Route('/users', name: 'admin_users_list', methods: ['GET'])]
     public function listUsers(EntityManagerInterface $em): JsonResponse
     {
@@ -39,6 +48,12 @@ final class AdminController extends AbstractController
     {
         $user->setIsLocked(true);
         $em->flush();
+        $this->notificationService->notify(
+            $user,
+            'Account locked',
+            'Your account has been locked by a platform administrator for review.',
+            Notification::CATEGORY_RISK
+        );
 
         return $this->json(['message' => 'User account locked']);
     }
@@ -49,6 +64,12 @@ final class AdminController extends AbstractController
         $user->setIsLocked(false);
         $user->resetFailedLoginAttempts();
         $em->flush();
+        $this->notificationService->notify(
+            $user,
+            'Account unlocked',
+            'Your account has been unlocked by a platform administrator and access has been restored.',
+            Notification::CATEGORY_RISK
+        );
 
         return $this->json(['message' => 'User account unlocked']);
     }

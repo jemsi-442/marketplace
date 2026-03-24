@@ -78,6 +78,11 @@ class VendorTrustProfile
         return $this->disputeCount;
     }
 
+    public function getAverageRating(): float
+    {
+        return $this->averageRating;
+    }
+
     public function getCompletedJobsCount(): int
     {
         return $this->completedJobsCount;
@@ -93,9 +98,37 @@ class VendorTrustProfile
         return $this->calculatedTrustScore;
     }
 
+    public function getOnTimeDeliveryRatio(): float
+    {
+        return $this->onTimeDeliveryRatio;
+    }
+
+    public function getRefundRatio(): float
+    {
+        return $this->refundRatio;
+    }
+
+    public function getTotalVolumeMinor(): int
+    {
+        return $this->totalVolumeMinor;
+    }
+
     public function getRiskLevel(): string
     {
         return $this->riskLevel;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getLastCalculationMetadata(): ?array
+    {
+        return $this->lastCalculationMetadata;
+    }
+
+    public function getUpdatedAt(): \DateTimeImmutable
+    {
+        return $this->updatedAt;
     }
 
     public function applySnapshot(
