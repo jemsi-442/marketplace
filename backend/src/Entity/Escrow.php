@@ -218,6 +218,16 @@ class Escrow
         return $this->riskMetadata;
     }
 
+    public function getDisputedAt(): ?\DateTimeImmutable
+    {
+        return $this->disputedAt;
+    }
+
+    public function getResolvedAt(): ?\DateTimeImmutable
+    {
+        return $this->resolvedAt;
+    }
+
     public function transitionToFunded(string $externalPaymentReference, string $externalTransactionId, array $snapshot): void
     {
         $this->assertTransition(self::STATUS_FUNDED);

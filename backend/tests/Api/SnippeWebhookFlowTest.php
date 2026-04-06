@@ -110,6 +110,56 @@ final class SnippeWebhookFlowTest extends ApiTestCase
         self::assertSame('Duplicate webhook ignored', $duplicatePayout['message'] ?? null);
     }
 
+    public function testMalformedSuccessWebhooksAreRecordedButNotAppliedWhenTransactionIdIsMissing(): void
+    {
+        $suffix = $this->uniqueSuffix();
+        $password = 'Password123!';
+        $email = "vendor_webhook_missing_txn_{$suffix}@test.com";
+
+        $register = $this->registerUser($email, $password, 'vendor');
+        $userId = (int) $register['user']['id'];
+        $escrowReference = "escrow_missing_txn_{$suffix}";
+        $paymentReference = "payref_missing_txn_{$suffix}";
+
+        $this->seedEscrow(
+            $escrowReference,
+            $userId,
+            $userId,
+            12000,
+            'TZS',
+            'CREATED',
+            $paymentReference
+        );
+
+        $timestamp = (string) time();
+        $collectionBody = $this->jsonEncode([
+            'id' => 'evt_missing_txn_' . $suffix,
+            'type' => 'payment.completed',
+            'created_at' => gmdate('Y-m-d\TH:i:s\Z'),
+            'data' => [
+                'reference' => $paymentReference,
+                'status' => 'success',
+                'metadata' => [
+                    'order_id' => $escrowReference,
+                ],
+            ],
+        ]);
+
+        $signature = hash_hmac('sha256', $collectionBody, $this->webhookSecret());
+
+        $response = $this->requestRawWebhook('/webhooks/snippe/collection', $collectionBody, $signature, $timestamp, 'payment.completed');
+        self::assertResponseStatusCodeSame(Response::HTTP_ACCEPTED);
+        self::assertSame('Webhook recorded but not applied', $response['message'] ?? null);
+        self::assertSame('Collection success webhook missing transaction id.', $response['reason'] ?? null);
+
+        self::assertSame(
+            'CREATED',
+            $this->db->fetchOne('SELECT status FROM escrow WHERE reference = :reference LIMIT 1', [
+                'reference' => $escrowReference,
+            ])
+        );
+    }
+
     private function webhookSecret(): string
     {
         $secret = $_SERVER['SNIPPE_WEBHOOK_SECRET'] ?? $_ENV['SNIPPE_WEBHOOK_SECRET'] ?? getenv('SNIPPE_WEBHOOK_SECRET') ?: '';

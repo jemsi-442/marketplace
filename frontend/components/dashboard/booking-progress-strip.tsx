@@ -10,28 +10,28 @@ export function BookingProgressStrip({ booking }: BookingProgressStripProps) {
   const steps = getBookingProgressSteps(booking);
 
   return (
-    <div className="rounded-[20px] border border-[var(--line)] bg-[rgba(255,255,255,0.03)] px-4 py-4">
+    <div className="rounded-[20px] border border-[var(--line)] bg-[rgba(248,250,252,0.94)] px-4 py-4">
       <div className="flex items-center gap-2 overflow-x-auto">
         {steps.map((step, index) => (
           <div key={step.key} className="flex min-w-0 flex-1 items-center gap-2">
             <div
               className={cn(
-                'flex size-8 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold uppercase tracking-[0.12em]',
-                step.state === 'done' && 'border-[rgba(83,214,146,0.28)] bg-[rgba(83,214,146,0.12)] text-[#8ef0b7]',
-                step.state === 'current' && 'border-[rgba(78,137,255,0.24)] bg-[rgba(47,107,255,0.12)] text-[var(--brand-secondary)]',
-                step.state === 'pending' && 'border-[var(--line)] bg-[var(--panel-muted)] text-[var(--text-tertiary)]',
-                step.state === 'risk' && 'border-[rgba(255,110,110,0.24)] bg-[rgba(255,110,110,0.12)] text-[#ffb3b3]',
+                'flex size-8 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold uppercase tracking-[0.14em]',
+                step.state === 'done' && 'border-[rgba(34,197,94,0.18)] bg-[rgba(240,253,244,0.94)] text-emerald-700',
+                step.state === 'current' && 'border-[rgba(99,102,241,0.18)] bg-[rgba(238,242,255,0.94)] text-[var(--brand-primary)]',
+                step.state === 'pending' && 'border-[var(--line)] bg-white text-[var(--text-tertiary)]',
+                step.state === 'risk' && 'border-[rgba(249,115,22,0.18)] bg-[rgba(255,247,237,0.94)] text-orange-700',
               )}
             >
               {index + 1}
             </div>
             <span
               className={cn(
-                'truncate text-xs uppercase tracking-[0.14em]',
-                step.state === 'done' && 'text-[#baf7d0]',
+                'truncate text-[11px] uppercase tracking-[0.16em]',
+                step.state === 'done' && 'text-emerald-700',
                 step.state === 'current' && 'text-[var(--text-primary)]',
                 step.state === 'pending' && 'text-[var(--text-tertiary)]',
-                step.state === 'risk' && 'text-[#ffc2c2]',
+                step.state === 'risk' && 'text-orange-700',
               )}
             >
               {step.label}

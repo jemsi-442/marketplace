@@ -2,9 +2,10 @@
 
 namespace App\Controller\Api\Auth;
 
-use App\Entity\User;
+use App\Http\AuthCookies;
 use App\Repository\UserRepository;
 use App\Service\AuthService;
+use App\Service\JwtService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -16,13 +17,19 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 #[Route('/api/login', methods: ['POST'])]
 final class LoginController extends AbstractController
 {
+    public function __construct(
+        #[Autowire(service: 'limiter.login')]
+        private readonly RateLimiterFactory $apiLoginLimiter,
+    ) {
+    }
+
     public function __invoke(
         Request $request,
         UserRepository $users,
         UserPasswordHasherInterface $hasher,
         AuthService $auth,
-        #[Autowire(service: 'limiter.login')]
-        RateLimiterFactory $apiLoginLimiter
+        JwtService $jwtService,
+        AuthCookies $authCookies
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
         if (!is_array($data)) {
@@ -35,8 +42,11 @@ final class LoginController extends AbstractController
             return $this->json(['error' => 'Invalid payload'], 400);
         }
 
-        // 🔐 Rate limit per email
-        $limiter = $apiLoginLimiter->create($email);
+        $normalizedEmail = strtolower(trim($email));
+        $ipAddress = $request->getClientIp() ?? 'unknown';
+
+        // Rate limit by email plus source IP to reduce account-targeted lockout abuse.
+        $limiter = $this->apiLoginLimiter->create(sprintf('%s|%s', $normalizedEmail, $ipAddress));
 
         if (!$limiter->consume()->isAccepted()) {
             return $this->json([
@@ -44,7 +54,7 @@ final class LoginController extends AbstractController
             ], 429);
         }
 
-        $user = $users->findOneBy(['email' => $email]);
+        $user = $users->findOneBy(['email' => $normalizedEmail]);
 
         if (!$user || !$hasher->isPasswordValid($user, $password)) {
             return $this->json(['error' => 'Invalid credentials'], 401);
@@ -61,8 +71,17 @@ final class LoginController extends AbstractController
             ], 403);
         }
 
-        return $this->json(
-            $auth->login($user)
-        );
+        $session = $auth->login($user);
+
+        $response = $this->json([
+            'expires_in' => $session['expires_in'],
+            'user' => $session['user'],
+        ]);
+
+        return $authCookies->attachSessionCookies($response, [
+            'access_token' => $session['token'],
+            'refresh_token' => $session['refresh_token'],
+            'expires_in' => $session['expires_in'],
+        ], $jwtService->getRefreshTtl());
     }
 }

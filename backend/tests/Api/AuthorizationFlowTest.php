@@ -19,7 +19,10 @@ final class AuthorizationFlowTest extends ApiTestCase
         $outsiderRegistration = $this->registerUser("outsider_auth_{$suffix}@test.com", $password, 'client');
         $secondVendorRegistration = $this->registerUser("second_vendor_auth_{$suffix}@test.com", $password, 'vendor');
 
-        $this->requestJson('GET', '/api/messages/inbox', token: $clientRegistration['token']);
+        $this->requestJson('POST', '/api/login', [
+            'email' => $clientRegistration['user']['email'],
+            'password' => $password,
+        ]);
         self::assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
 
         $this->verifyUser($clientRegistration['verification_url']);
@@ -39,26 +42,34 @@ final class AuthorizationFlowTest extends ApiTestCase
         $outsiderLogin = $this->loginUser($outsiderRegistration['user']['email'], $password);
         $secondVendorLogin = $this->loginUser($secondVendorRegistration['user']['email'], $password);
 
-        $this->requestJson('GET', '/api/messages/inbox');
-        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
-
-        $this->requestJson('GET', '/api/messages/inbox', token: $clientLogin['token']);
-        self::assertResponseStatusCodeSame(Response::HTTP_OK);
-
-        $serviceCreate = $this->requestJson('POST', '/api/services', [
+        $legacyServiceCreate = $this->requestJson('POST', '/api/services', [
             'title' => 'Smoke Test Service',
             'description' => 'Auth suite fixture',
             'category' => 'testing',
             'price_cents' => 250000,
         ], $vendorLogin['token']);
-        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
-        $serviceId = (int) $serviceCreate['id'];
+        self::assertResponseStatusCodeSame(Response::HTTP_GONE);
+        self::assertStringContainsString('retired', (string) ($legacyServiceCreate['error'] ?? ''));
 
-        $bookingCreate = $this->requestJson('POST', '/api/bookings', [
-            'service_id' => $serviceId,
+        $legacyBookingCreate = $this->requestJson('POST', '/api/bookings', [
+            'service_id' => 999999,
+            'request_summary' => 'Need authorization matrix coverage for this booking.',
         ], $clientLogin['token']);
-        self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
-        $bookingId = (int) $bookingCreate['booking_id'];
+        self::assertResponseStatusCodeSame(Response::HTTP_GONE);
+        self::assertStringContainsString('Direct service bookings were retired', (string) ($legacyBookingCreate['error'] ?? ''));
+
+        $bookingFixture = $this->seedPlatformManagedBooking(
+            (int) $clientRegistration['user']['id'],
+            (int) $vendorRegistration['user']['id'],
+            'Need authorization matrix coverage for this booking.'
+        );
+        $bookingId = $bookingFixture['booking_id'];
+
+        $this->requestJson('GET', "/api/messages/bookings/{$bookingId}");
+        self::assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+
+        $this->requestJson('GET', "/api/messages/bookings/{$bookingId}", token: $clientLogin['token']);
+        self::assertResponseStatusCodeSame(Response::HTTP_OK);
 
         $escrowId = $this->seedEscrow(
             "auth_escrow_{$suffix}",
@@ -75,6 +86,12 @@ final class AuthorizationFlowTest extends ApiTestCase
         self::assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
 
         $this->requestJson('GET', '/api/admin/users', token: $vendorLogin['token']);
+        self::assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
+
+        $this->requestJson('GET', '/api/vendor/service-capabilities', token: $adminLogin['token']);
+        self::assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
+
+        $this->requestJson('GET', '/api/vendor/request-feed', token: $adminLogin['token']);
         self::assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
 
         $this->requestJson('POST', '/api/withdrawals/999999/approve', [], $vendorLogin['token']);
@@ -121,6 +138,11 @@ final class AuthorizationFlowTest extends ApiTestCase
         $this->requestJson('PUT', "/api/bookings/{$bookingId}", [
             'status' => 'completed',
         ], $clientLogin['token']);
+        self::assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
+
+        $this->requestJson('PUT', "/api/bookings/{$bookingId}", [
+            'status' => 'completed',
+        ], $adminLogin['token']);
         self::assertResponseStatusCodeSame(Response::HTTP_OK);
 
         $this->requestJson('POST', '/api/reviews', [
@@ -137,12 +159,12 @@ final class AuthorizationFlowTest extends ApiTestCase
         ], $clientLogin['token']);
         self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
 
-        $this->requestJson('PUT', "/api/services/{$serviceId}", [
+        $this->requestJson('PUT', '/api/services/999999', [
             'title' => 'Hijacked Title',
         ], $secondVendorLogin['token']);
-        self::assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
+        self::assertResponseStatusCodeSame(Response::HTTP_GONE);
 
-        $this->requestJson('DELETE', "/api/services/{$serviceId}", token: $secondVendorLogin['token']);
-        self::assertResponseStatusCodeSame(Response::HTTP_FORBIDDEN);
+        $this->requestJson('DELETE', '/api/services/999999', token: $secondVendorLogin['token']);
+        self::assertResponseStatusCodeSame(Response::HTTP_GONE);
     }
 }

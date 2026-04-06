@@ -34,8 +34,12 @@ if [[ -z "$TEST_DB_URL" && -f .env.test.local ]]; then
     TEST_DB_URL="$(read_env_file_value .env.test.local TEST_DATABASE_URL)"
 fi
 
-if [[ -z "$APP_DB_URL" && -f .env.test ]]; then
-    APP_DB_URL="$(read_env_file_value .env.test DATABASE_URL)"
+if [[ -z "$APP_DB_URL" && -f .env.local ]]; then
+    APP_DB_URL="$(read_env_file_value .env.local DATABASE_URL)"
+fi
+
+if [[ -z "$APP_DB_URL" && -f .env ]]; then
+    APP_DB_URL="$(read_env_file_value .env DATABASE_URL)"
 fi
 
 if [[ -z "$TEST_DB_URL" ]]; then
@@ -71,5 +75,6 @@ if ! DATABASE_URL="$TEST_DB_URL" APP_ENV=test APP_DEBUG=0 php bin/console doctri
 fi
 
 DATABASE_URL="$TEST_DB_URL" APP_ENV=test APP_DEBUG=0 php bin/console doctrine:migrations:migrate --no-interaction
+DATABASE_URL="$TEST_DB_URL" APP_ENV=test APP_DEBUG=0 php bin/console cache:clear --env=test --no-interaction >/dev/null
 
 echo "Test database is ready."

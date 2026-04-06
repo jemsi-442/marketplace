@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Service\Matching;
 
-use App\Entity\Service;
 use App\Entity\VendorTrustProfile;
+use App\Entity\VendorServiceCapability;
 use Doctrine\ORM\EntityManagerInterface;
 
 class RuleBasedMatchingStrategy implements MatchingStrategyInterface
@@ -20,11 +20,11 @@ class RuleBasedMatchingStrategy implements MatchingStrategyInterface
     }
 
     /**
-     * @param array<int, Service> $services
+     * @param array<int, VendorServiceCapability> $capabilities
      * @param array<string, mixed> $criteria
      * @return array<int, array<string, mixed>>
      */
-    public function rank(array $services, array $criteria): array
+    public function rank(array $capabilities, array $criteria): array
     {
         $queryValue = $criteria['query'] ?? '';
         $budgetValue = $criteria['budget_minor'] ?? 0;
@@ -36,16 +36,18 @@ class RuleBasedMatchingStrategy implements MatchingStrategyInterface
 
         $ranked = [];
 
-        foreach ($services as $service) {
-            $vendor = $service->getVendor()->getUser();
+        foreach ($capabilities as $capability) {
+            $vendor = $capability->getVendor()->getUser();
+            $serviceType = $capability->getServiceType();
+            $startingPriceMinor = $capability->getStartingPriceMinor() ?? 0;
 
             $trustProfile = $this->em->getRepository(VendorTrustProfile::class)->findOneBy(['vendor' => $vendor]);
             $trustScore = $trustProfile instanceof VendorTrustProfile
                 ? $trustProfile->getCalculatedTrustScore()
                 : $vendor->getTrustScore();
 
-            $relevanceScore = $this->relevanceScore($service, $query);
-            $priceFitScore = $this->priceFitScore($service->getPriceCents(), $budgetMinor);
+            $relevanceScore = $this->relevanceScore($capability, $query);
+            $priceFitScore = $this->priceFitScore($startingPriceMinor, $budgetMinor);
             $historicalSimilarity = $trustProfile instanceof VendorTrustProfile
                 ? $trustProfile->getEscrowReleaseRatio() * 100
                 : 50.0;
@@ -63,10 +65,13 @@ class RuleBasedMatchingStrategy implements MatchingStrategyInterface
             $composite += $historicalSimilarity * ($this->weights['historical_similarity'] ?? 0.15);
 
             $ranked[] = [
-                'service_id' => $service->getId(),
-                'title' => $service->getTitle(),
-                'price_cents' => $service->getPriceCents(),
+                'service_id' => null,
+                'service_type_id' => $serviceType->getId(),
+                'capability_id' => $capability->getId(),
+                'title' => $serviceType->getName(),
+                'price_cents' => $startingPriceMinor,
                 'vendor_id' => $vendor->getId(),
+                'category' => $serviceType->getCategory(),
                 'scores' => [
                     'composite' => round($composite, 2),
                     'trust' => round($trustScore, 2),
@@ -82,13 +87,21 @@ class RuleBasedMatchingStrategy implements MatchingStrategyInterface
         return $ranked;
     }
 
-    private function relevanceScore(Service $service, string $query): float
+    private function relevanceScore(VendorServiceCapability $capability, string $query): float
     {
         if ($query === '') {
             return 50.0;
         }
 
-        $haystack = strtolower(trim($service->getTitle() . ' ' . ($service->getDescription() ?? '') . ' ' . ($service->getCategory() ?? '')));
+        $serviceType = $capability->getServiceType();
+        $haystack = strtolower(trim(implode(' ', array_filter([
+            $serviceType->getName(),
+            $serviceType->getSlug(),
+            $serviceType->getCategory(),
+            $capability->getPortfolioSummary(),
+            $capability->getTurnaroundNote(),
+            $capability->getExperienceLevel(),
+        ], static fn (?string $value): bool => is_string($value) && trim($value) !== ''))));
         $tokens = array_values(array_filter(explode(' ', $query), static fn (string $token): bool => strlen($token) >= 2));
         if ($tokens === []) {
             return 50.0;

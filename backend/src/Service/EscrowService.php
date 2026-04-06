@@ -8,8 +8,10 @@ use App\Entity\Booking;
 use App\Entity\Escrow;
 use App\Entity\User;
 use App\Exception\Domain\EscrowRequiresManualReviewException;
+use App\Exception\Domain\InvalidStateTransitionException;
 use App\Exception\Domain\UnauthorizedFinancialOperationException;
 use App\Repository\EscrowRepository;
+use App\Support\MobileMoneyProviderCatalog;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -28,13 +30,23 @@ class EscrowService
     ) {
     }
 
+    private function isAdmin(User $user): bool
+    {
+        $roles = $user->getRoles();
+
+        return in_array('ROLE_ADMIN', $roles, true) || in_array('ROLE_SUPER_ADMIN', $roles, true);
+    }
+
     public function createEscrow(Booking $booking, User $client, int $amountMinor, string $currency): Escrow
     {
         if ($booking->getEscrow() !== null) {
             throw new \LogicException('Escrow already exists for this booking.');
         }
 
-        $vendor = $booking->getService()->getVendor()->getUser();
+        $vendor = $booking->resolveVendorUser();
+        if ($vendor === null) {
+            throw new \LogicException('Booking vendor is not assigned.');
+        }
 
         if ($client->getId() !== $booking->getClient()->getId()) {
             throw new UnauthorizedFinancialOperationException('Only booking owner can create escrow.');
@@ -72,16 +84,30 @@ class EscrowService
      */
     public function initiateCollectionPayment(Escrow $escrow, string $msisdn, string $provider, string $callbackUrl): array
     {
-        $riskMetadata = $escrow->getRiskMetadata();
-        if (($riskMetadata['manual_review_required'] ?? false) === true) {
-            throw new EscrowRequiresManualReviewException('Escrow is flagged for manual review before collection.');
+        $normalizedMsisdn = MobileMoneyProviderCatalog::normalizeTanzanianMsisdn($msisdn);
+        if ($normalizedMsisdn === null) {
+            throw new \InvalidArgumentException('Use a valid Tanzania mobile number such as 07XXXXXXXX or 2557XXXXXXX');
+        }
+
+        $normalizedProvider = MobileMoneyProviderCatalog::normalizeProvider($provider);
+        if ($normalizedProvider === null) {
+            throw new \InvalidArgumentException('Unsupported mobile money provider');
         }
 
         $idempotencyKey = 'collect_' . $escrow->getReference();
 
         /** @return array<string, mixed> */
-        return $this->em->wrapInTransaction(function () use ($escrow, $msisdn, $provider, $callbackUrl, $idempotencyKey): array {
+        return $this->em->wrapInTransaction(function () use ($escrow, $normalizedMsisdn, $normalizedProvider, $callbackUrl, $idempotencyKey): array {
             $this->em->lock($escrow, LockMode::PESSIMISTIC_WRITE);
+
+            if ($escrow->getStatus() !== Escrow::STATUS_CREATED) {
+                throw new InvalidStateTransitionException('Payment prompt can only be created while escrow is awaiting funding.');
+            }
+
+            $riskMetadata = $escrow->getRiskMetadata();
+            if (($riskMetadata['manual_review_required'] ?? false) === true) {
+                throw new EscrowRequiresManualReviewException('Escrow is flagged for manual review before collection.');
+            }
 
             $clientEmail = $escrow->getClient()->getEmail();
             $localPart = strtok($clientEmail, '@');
@@ -90,8 +116,8 @@ class EscrowService
                 reference: $escrow->getReference(),
                 amountMinor: $escrow->getAmountMinor(),
                 currency: $escrow->getCurrency(),
-                msisdn: $msisdn,
-                provider: $provider,
+                msisdn: $normalizedMsisdn,
+                provider: $normalizedProvider,
                 callbackUrl: $callbackUrl,
                 idempotencyKey: $idempotencyKey,
                 customerEmail: $clientEmail,
@@ -154,6 +180,10 @@ class EscrowService
                 return;
             }
 
+            if ($externalTransactionId === '') {
+                throw new \InvalidArgumentException('Collection success webhook missing transaction id.');
+            }
+
             if ($escrow->getStatus() !== Escrow::STATUS_CREATED) {
                 if ($escrow->getExternalTransactionId() === $externalTransactionId) {
                     return;
@@ -175,6 +205,14 @@ class EscrowService
                 'payload' => $payload,
             ]);
             $this->auditLogger->log($escrow, 'ESCROW_ACTIVE', null, ['reason' => 'payment_success']);
+
+            $booking = $escrow->getBooking();
+            if ($booking !== null) {
+                $booking->setStatus(Booking::STATUS_CONFIRMED);
+                if ($booking->getClientRequest() !== null) {
+                    $booking->getClientRequest()->setStatus(\App\Entity\ClientRequest::STATUS_FUNDED);
+                }
+            }
 
             $this->em->flush();
         });
@@ -202,6 +240,9 @@ class EscrowService
             $booking = $escrow->getBooking();
             if ($booking !== null) {
                 $booking->setStatus(Booking::STATUS_COMPLETED);
+                if ($booking->getClientRequest() !== null) {
+                    $booking->getClientRequest()->setStatus(\App\Entity\ClientRequest::STATUS_COMPLETED);
+                }
             }
             $this->trustCalculator->recalculateForVendor($escrow->getVendor(), 'ESCROW_RELEASED', [
                 'escrow_reference' => $escrow->getReference(),
@@ -224,6 +265,10 @@ class EscrowService
             }
 
             $escrow->transitionToDisputed($metadata);
+            $booking = $escrow->getBooking();
+            if ($booking !== null && $booking->getClientRequest() !== null) {
+                $booking->getClientRequest()->setStatus(\App\Entity\ClientRequest::STATUS_DISPUTED);
+            }
             $this->fraudMonitoringService->recordMultipleDisputes($escrow->getVendor(), [
                 'escrow_reference' => $escrow->getReference(),
             ]);
@@ -237,7 +282,7 @@ class EscrowService
      */
     public function resolveDispute(Escrow $escrow, User $admin, bool $releaseToVendor, array $metadata = []): void
     {
-        if (!in_array('ROLE_ADMIN', $admin->getRoles(), true)) {
+        if (!$this->isAdmin($admin)) {
             throw new UnauthorizedFinancialOperationException('Admin privileges required.');
         }
 
@@ -262,6 +307,13 @@ class EscrowService
             $booking = $escrow->getBooking();
             if ($booking !== null) {
                 $booking->setStatus($releaseToVendor ? Booking::STATUS_COMPLETED : Booking::STATUS_CANCELLED);
+                if ($booking->getClientRequest() !== null) {
+                    $booking->getClientRequest()->setStatus(
+                        $releaseToVendor
+                            ? \App\Entity\ClientRequest::STATUS_COMPLETED
+                            : \App\Entity\ClientRequest::STATUS_CANCELLED
+                    );
+                }
             }
 
             $this->trustCalculator->recalculateForVendor($escrow->getVendor(), 'DISPUTE_RESOLVED', [

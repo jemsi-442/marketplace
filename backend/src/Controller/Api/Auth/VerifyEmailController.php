@@ -17,12 +17,13 @@ final class VerifyEmailController extends AbstractController
     {
         $token = trim((string) $request->query->get('token', ''));
         $expires = (int) $request->query->get('expires', 0);
+        $signature = trim((string) $request->query->get('signature', ''));
 
-        if ($token === '' || $expires <= 0) {
-            return $this->json(['error' => 'token and expires are required'], 400);
+        if ($token === '' || $expires <= 0 || $signature === '') {
+            return $this->json(['error' => 'token, expires, and signature are required'], 400);
         }
 
-        if (!$emailVerifier->verify($token, $expires)) {
+        if (!$emailVerifier->verify($token, $expires, $signature)) {
             return $this->json(['error' => 'Verification link is invalid or expired'], 400);
         }
 

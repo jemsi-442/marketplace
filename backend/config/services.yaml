@@ -1,6 +1,8 @@
 parameters:
     env(APP_ENV): 'dev'
     env(APP_SECRET): 'your_secret_here'
+    delivery.attachments.upload_dir: '%kernel.project_dir%/var/uploads/deliveries'
+    delivery.attachments.legacy_public_upload_dir: '%kernel.project_dir%/public/uploads/deliveries'
     ai.trust.weights:
         rating: 0.22
         escrow_release_ratio: 0.23
@@ -89,11 +91,36 @@ services:
             $accessTtl: 3600
             $refreshTtl: 604800
 
+    App\Http\AuthCookies: ~
+
+    App\Security\JwtAuthenticator:
+        arguments:
+            $authCookies: '@App\Http\AuthCookies'
+
     App\Service\SnippeClient:
         arguments:
             $apiKey: '%env(SNIPPE_API_KEY)%'
             $baseUrl: '%env(SNIPPE_BASE_URL)%'
             $webhookSecret: '%env(SNIPPE_WEBHOOK_SECRET)%'
+
+    App\Service\DeliveryAttachmentStorage:
+        arguments:
+            $uploadDir: '%delivery.attachments.upload_dir%'
+            $legacyPublicUploadDir: '%delivery.attachments.legacy_public_upload_dir%'
+
+    App\Service\DeliverySubmissionLifecycleService:
+        public: true
+
+    App\EventSubscriber\TransactionSubscriber:
+        tags: ['doctrine.event_subscriber']
+
+    App\EventSubscriber\ReviewTrustSubscriber:
+        tags: ['doctrine.event_subscriber']
+
+    App\EventListener\DeliveryAttachmentCleanupListener:
+        tags:
+            - { name: 'doctrine.orm.entity_listener', event: 'preRemove', entity: 'App\Entity\DeliveryAttachment', method: 'preRemoveAttachment' }
+            - { name: 'doctrine.orm.entity_listener', event: 'preRemove', entity: 'App\Entity\DeliverySubmission', method: 'preRemoveSubmission' }
 
     App\Service\SnippeWebhookValidator:
         arguments:

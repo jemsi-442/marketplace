@@ -46,8 +46,8 @@ final class BookingVoter extends Voter
         /** @var Booking $booking */
         $booking = $subject;
 
-        // 🔥 ADMIN OVERRIDE
-        if ($this->isAdmin($user)) {
+        // Reviews should stay client-owned only; admin access is handled by other ops routes.
+        if ($attribute !== self::REVIEW && $this->isAdmin($user)) {
             return true;
         }
 
@@ -80,8 +80,8 @@ final class BookingVoter extends Voter
             return true;
         }
 
-        // Vendor can view booking assigned to their service
-        if ($booking->getService()->getVendor()->getUser()->getId() === $user->getId()) {
+        $vendor = $booking->resolveVendorUser();
+        if ($vendor !== null && $vendor->getId() === $user->getId()) {
             return true;
         }
 
@@ -120,8 +120,8 @@ final class BookingVoter extends Voter
             return false;
         }
 
-        $vendorId = $booking->getService()->getVendor()->getUser()->getId();
+        $vendorId = $booking->resolveVendorUser()?->getId();
 
-        return $vendorId !== $user->getId();
+        return $vendorId !== null && $vendorId !== $user->getId();
     }
 }

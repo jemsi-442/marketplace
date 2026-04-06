@@ -10,6 +10,10 @@ use Doctrine\ORM\EntityManagerInterface;
 
 class SnippeWebhookService
 {
+    private const MAX_DEPTH = 3;
+    private const MAX_ITEMS = 20;
+    private const MAX_STRING_LENGTH = 180;
+
     public function __construct(private readonly EntityManagerInterface $em)
     {
     }
@@ -31,8 +35,8 @@ class SnippeWebhookService
                 eventId: $eventId,
                 externalReference: $externalReference,
                 eventType: $eventType,
-                payload: $payload,
-                signature: $signature,
+                payload: $this->sanitizeArray($payload),
+                signature: $this->normalizeSignature($signature),
                 sentAt: $sentAt
             ));
             $this->em->flush();
@@ -56,5 +60,79 @@ class SnippeWebhookService
 
         $event->markProcessed();
         $this->em->flush();
+    }
+
+    private function normalizeSignature(?string $signature): ?string
+    {
+        if ($signature === null || trim($signature) === '') {
+            return null;
+        }
+
+        return hash('sha256', trim($signature));
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function sanitizeArray(array $data, int $depth = 0): array
+    {
+        if ($depth >= self::MAX_DEPTH) {
+            return ['_truncated' => 'depth_limit'];
+        }
+
+        $sanitized = [];
+        $count = 0;
+
+        foreach ($data as $key => $value) {
+            if ($count >= self::MAX_ITEMS) {
+                $sanitized['_truncated'] = 'item_limit';
+                break;
+            }
+
+            $normalizedKey = mb_substr(trim((string) $key), 0, 80);
+            if ($normalizedKey === '') {
+                continue;
+            }
+
+            $sanitized[$normalizedKey] = $this->sanitizeValue($normalizedKey, $value, $depth);
+            ++$count;
+        }
+
+        return $sanitized;
+    }
+
+    private function sanitizeValue(string $key, mixed $value, int $depth): mixed
+    {
+        if ($this->isSensitiveKey($key)) {
+            return '[redacted]';
+        }
+
+        if (is_array($value)) {
+            return $this->sanitizeArray($value, $depth + 1);
+        }
+
+        if (is_string($value)) {
+            return mb_substr(trim($value), 0, self::MAX_STRING_LENGTH);
+        }
+
+        if (is_scalar($value) || $value === null) {
+            return $value;
+        }
+
+        return '[omitted]';
+    }
+
+    private function isSensitiveKey(string $key): bool
+    {
+        $normalized = strtolower($key);
+
+        foreach (['email', 'phone', 'msisdn', 'signature', 'token', 'secret', 'authorization'] as $needle) {
+            if (str_contains($normalized, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

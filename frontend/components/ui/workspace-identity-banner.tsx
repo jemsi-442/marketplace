@@ -15,11 +15,23 @@ interface WorkspaceIdentityBannerProps {
 
 const toneStyles: Record<WorkspaceIdentityTone, string> = {
   client:
-    'border-[rgba(124,194,255,0.24)] bg-[radial-gradient(circle_at_top_left,rgba(78,137,255,0.28),transparent_45%),linear-gradient(145deg,rgba(6,32,77,0.94),rgba(10,57,112,0.9))]',
+    'border-[rgba(79,70,229,0.12)] bg-[radial-gradient(circle_at_top_left,rgba(79,70,229,0.12),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(244,247,255,0.98))]',
   vendor:
-    'border-[rgba(170,180,255,0.24)] bg-[radial-gradient(circle_at_top_left,rgba(160,130,255,0.24),transparent_42%),linear-gradient(145deg,rgba(28,20,92,0.94),rgba(17,57,125,0.9))]',
+    'border-[rgba(20,184,166,0.14)] bg-[radial-gradient(circle_at_top_left,rgba(20,184,166,0.12),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(240,253,250,0.98))]',
   admin:
-    'border-[rgba(255,151,182,0.24)] bg-[radial-gradient(circle_at_top_left,rgba(255,126,162,0.22),transparent_38%),linear-gradient(145deg,rgba(56,18,52,0.94),rgba(70,24,84,0.92))]',
+    'border-[rgba(249,115,22,0.16)] bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.12),transparent_40%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,247,237,0.98))]',
+};
+
+const iconToneStyles: Record<WorkspaceIdentityTone, string> = {
+  client: 'border-[rgba(79,70,229,0.14)] bg-[rgba(79,70,229,0.08)] text-[var(--brand-primary)]',
+  vendor: 'border-[rgba(20,184,166,0.16)] bg-[rgba(20,184,166,0.1)] text-[var(--accent-teal)]',
+  admin: 'border-[rgba(249,115,22,0.18)] bg-[rgba(249,115,22,0.1)] text-[var(--accent-coral)]',
+};
+
+const highlightToneStyles: Record<WorkspaceIdentityTone, string> = {
+  client: 'border-[rgba(79,70,229,0.12)] bg-[rgba(255,255,255,0.78)]',
+  vendor: 'border-[rgba(20,184,166,0.14)] bg-[rgba(255,255,255,0.82)]',
+  admin: 'border-[rgba(249,115,22,0.14)] bg-[rgba(255,255,255,0.84)]',
 };
 
 const iconMap: Record<WorkspaceIdentityTone, ReactNode> = {
@@ -38,48 +50,48 @@ export function WorkspaceIdentityBanner({
   return (
     <section
       className={cn(
-        'mt-6 overflow-hidden rounded-[30px] border p-6 shadow-[0_32px_80px_rgba(0,0,0,0.26)] backdrop-blur-xl',
+        'mt-6 overflow-hidden rounded-[26px] border p-4 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:rounded-[30px] sm:p-6',
         toneStyles[tone],
       )}
     >
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="max-w-3xl">
           <div className="flex items-center gap-3">
-            <span className="inline-flex size-11 items-center justify-center rounded-full border border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.08)] text-[var(--text-primary)]">
+            <span className={cn('inline-flex size-10 items-center justify-center rounded-full border sm:size-11', iconToneStyles[tone])}>
               {iconMap[tone]}
             </span>
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-[var(--text-tertiary)]">
-                {tone === 'client' ? 'Client command view' : 'Vendor studio view'}
+                {tone === 'client' ? 'Client command view' : tone === 'vendor' ? 'Vendor studio view' : 'Admin operations view'}
               </p>
               <p className="mt-1 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                 <Sparkles className="size-4 text-[var(--brand-secondary)]" />
                 {tone === 'client'
                   ? 'Discovery, protected booking, and delivery follow-up'
                   : tone === 'vendor'
-                    ? 'Business setup, live offers, delivery execution, and payout control'
+                    ? 'Business setup, active capability lanes, delivery execution, and payout control'
                     : 'Dispute review, risk watchlists, and controlled intervention'}
               </p>
             </div>
           </div>
 
-          <h2 className="mt-5 font-display text-3xl tracking-[-0.04em] text-[var(--text-primary)]">{title}</h2>
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--text-secondary)]">{description}</p>
+          <h2 className="mt-4 font-display text-[1.7rem] tracking-[-0.04em] text-[var(--text-primary)] sm:mt-5 sm:text-3xl">{title}</h2>
+          <p className="mt-3 max-w-2xl text-[13px] leading-6 text-[var(--text-secondary)] sm:mt-4 sm:text-sm sm:leading-7">{description}</p>
         </div>
 
         {actions ? <div className="flex flex-wrap gap-3 xl:max-w-xl xl:justify-end">{actions}</div> : null}
       </div>
 
-      <div className="mt-6 grid gap-3 md:grid-cols-3">
+      <div className="mt-5 grid gap-3 md:grid-cols-3 sm:mt-6">
         {highlights.map((highlight, index) => (
           <div
             key={highlight}
-            className="rounded-[22px] border border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.06)] px-4 py-4"
+            className={cn('rounded-[20px] border px-4 py-3.5 shadow-[0_10px_24px_rgba(15,23,42,0.04)] sm:rounded-[22px] sm:py-4', highlightToneStyles[tone])}
           >
             <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
               {tone === 'client' ? 'Client focus' : tone === 'vendor' ? 'Studio focus' : 'Ops focus'} {index + 1}
             </p>
-            <p className="mt-3 text-sm leading-6 text-[var(--text-primary)]">{highlight}</p>
+            <p className="mt-2.5 text-[13px] leading-6 text-[var(--text-primary)] sm:mt-3 sm:text-sm">{highlight}</p>
           </div>
         ))}
       </div>

@@ -17,6 +17,7 @@ backend/config/jwt/public.pem
 # IDE
 .vscode/
 .idea/
+.codex
 
 # OS
 .DS_Store
@@ -25,3 +26,6 @@ backend/config/jwt/public.pem
 frontend/node_modules/
 frontend/.next/
 frontend/.env.local
+
+# Runtime uploads
+backend/public/uploads/

@@ -1,14 +1,29 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { LogOut, Menu } from 'lucide-react';
-import { type PropsWithChildren, type ReactNode, useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Home, LogOut, Menu } from 'lucide-react';
+import {
+  createContext,
+  type PropsWithChildren,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 
-import { CommandPalette } from '@/components/layout/command-palette';
 import { Sidebar } from '@/components/layout/sidebar';
+import { MarketingFooter } from '@/components/layout/marketing-footer';
+import { NetworkStatusChip } from '@/components/pwa/network-status-chip';
 import { Button } from '@/components/ui/button';
+import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/auth/store';
+import { toLoginHref } from '@/lib/auth/login-link';
 
 interface DashboardShellProps extends PropsWithChildren {
   title: string;
@@ -16,124 +31,235 @@ interface DashboardShellProps extends PropsWithChildren {
   mobileQuickActions?: ReactNode;
 }
 
-export function DashboardShell({ children, title, subtitle, mobileQuickActions }: DashboardShellProps) {
+interface DashboardShellConfig {
+  title: string;
+  subtitle: string;
+}
+
+interface DashboardFrameProps extends PropsWithChildren<DashboardShellConfig> {
+  mobileQuickActions?: ReactNode;
+}
+
+const DEFAULT_DASHBOARD_CONFIG: DashboardShellConfig = {
+  title: 'Workspace',
+  subtitle: 'Move through one page at a time from the menu on the left.',
+};
+const SHELL_SUMMARY_STALE_MS = 60_000;
+
+const DashboardShellContext = createContext<{
+  config: DashboardShellConfig;
+  setConfig: (config: DashboardShellConfig) => void;
+  mobileActionsHost: HTMLDivElement | null;
+} | null>(null);
+
+function DashboardFrame({ children, title, subtitle, mobileQuickActions }: DashboardFrameProps) {
+  const pathname = usePathname();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
   const hydrated = useAuthStore((state) => state.hydrated);
   const logout = useAuthStore((state) => state.logout);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const isAdmin = user?.roles.includes('ROLE_ADMIN') ?? false;
-  const isVendor = user?.roles.includes('ROLE_VENDOR') ?? false;
-  const workspaceLabel = isAdmin ? 'Operations workspace' : isVendor ? 'Vendor studio' : 'Client workspace';
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+
+  const shellSummaryQuery = useQuery({
+    queryKey: ['dashboard-shell-summary', token],
+    queryFn: () => apiClient.getDashboardShellSummary(token ?? ''),
+    enabled: hydrated && !!token,
+    staleTime: SHELL_SUMMARY_STALE_MS,
+    refetchOnMount: false,
+  });
+
+  const sidebarBadgeCounts = useMemo(() => {
+    const notificationUnread = shellSummaryQuery.data?.notifications_unread ?? 0;
+    const threadUnread = shellSummaryQuery.data?.inbox_total_unread ?? 0;
+    const pendingCapabilities = shellSummaryQuery.data?.admin_pending_capabilities ?? 0;
+    const disputedEscrows = shellSummaryQuery.data?.admin_disputed_escrows ?? 0;
+
+    return {
+      '/dashboard/admin-capabilities': pendingCapabilities,
+      '/dashboard/admin-escrows': disputedEscrows,
+      '/dashboard/notifications': notificationUnread,
+      '/dashboard/communications': threadUnread,
+    };
+  }, [shellSummaryQuery.data]);
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    router.replace(toLoginHref({ reason: 'signed-out' }));
+  }, [logout, router]);
 
   useEffect(() => {
-    if (hydrated && !user) {
-      router.replace('/login');
-    }
-  }, [hydrated, router, user]);
-
-  useEffect(() => {
-    if (!mobileMenuOpen) {
+    if (!hydrated) {
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (!user) {
+      router.replace(
+        toLoginHref({
+          reason: 'session-required',
+          next: pathname?.startsWith('/dashboard') ? pathname : null,
+        }),
+      );
+      return;
+    }
 
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [mobileMenuOpen]);
+    if (!user.is_verified) {
+      void (async () => {
+        await logout();
+        router.replace(
+          toLoginHref({
+            reason: 'verify-required',
+            email: user.email,
+          }),
+        );
+      })();
+    }
+  }, [hydrated, logout, pathname, router, user]);
 
   if (!hydrated) {
-    return <main className="flex min-h-screen items-center justify-center text-[var(--text-secondary)]">Hydrating workspace...</main>;
+    return <main className="flex min-h-screen items-center justify-center text-[var(--text-secondary)]">Loading workspace...</main>;
   }
 
-  if (!user) {
+  if (!user?.is_verified) {
     return <main className="flex min-h-screen items-center justify-center text-[var(--text-secondary)]">Redirecting to secure login...</main>;
   }
 
+  const sidebarFooter = (
+    <div className="grid grid-cols-2 gap-3">
+      <Link href="/">
+        <Button variant="ghost" className="w-full justify-center">
+          <Home className="mr-2 size-4" />
+          Home
+        </Button>
+      </Link>
+      <Button variant="ghost" className="w-full justify-center" onClick={() => void handleLogout()}>
+        <LogOut className="mr-2 size-4" />
+        Log out
+      </Button>
+    </div>
+  );
+
   return (
-    <main className="mx-auto grid min-h-screen max-w-[1560px] gap-6 px-4 py-4 xl:grid-cols-[300px_1fr] xl:px-6 xl:py-6">
-      <div className="hidden xl:block">
-        <Sidebar />
+    <main className="mx-auto min-h-screen max-w-[1420px] px-4 py-4 lg:px-5">
+      <div className="hidden lg:fixed lg:top-4 lg:left-[max(1.25rem,calc((100vw-1420px)/2+1.25rem))] lg:block lg:h-[calc(100vh-2rem)] lg:w-[272px]">
+        <Sidebar badgeCounts={sidebarBadgeCounts} footerActions={sidebarFooter} />
       </div>
 
-      {mobileMenuOpen ? (
-        <div className="fixed inset-0 z-50 xl:hidden">
-          <button
-            type="button"
-            className="absolute inset-0 bg-[rgba(4,10,28,0.62)] backdrop-blur-sm"
-            aria-label="Close menu overlay"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          <div className="animate-slide-in-left relative h-full max-w-[320px] p-4">
-            <Sidebar mobile onNavigate={() => setMobileMenuOpen(false)} onClose={() => setMobileMenuOpen(false)} />
-          </div>
-        </div>
-      ) : null}
-
-      <section
-        className={`rounded-[32px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(8,20,48,0.88),rgba(13,30,74,0.8))] p-6 shadow-[var(--shadow-panel)] backdrop-blur-2xl lg:p-8 ${mobileQuickActions ? 'pb-28 lg:pb-8' : ''}`}
-      >
-        <div className="mb-6 flex items-center justify-between gap-4 rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(15,34,82,0.84),rgba(14,31,74,0.68))] px-4 py-3 xl:hidden">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--brand-secondary)]">WOLFIX workspace</p>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">{user.email}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(true)}
-            className="flex size-11 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--panel-muted)] text-[var(--text-primary)] transition hover:bg-[var(--panel-strong)]"
-            aria-label="Open menu"
-          >
-            <Menu className="size-5" />
-          </button>
-        </div>
-
-        <div className="mb-8 flex flex-col gap-5 border-b border-[var(--line)] pb-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="mb-2 text-xs uppercase tracking-[0.24em] text-[var(--brand-secondary)]">{workspaceLabel}</p>
-            <h1 className="font-display text-4xl text-[var(--text-primary)]">{title}</h1>
-            <p className="mt-3 max-w-3xl text-[var(--text-secondary)]">{subtitle}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="rounded-full border border-[var(--line)] bg-[rgba(18,40,92,0.68)] px-4 py-2 text-sm text-[var(--text-secondary)]">
-              {user.email}
-            </div>
-            <CommandPalette roles={user.roles} />
-            <Link href="/">
-              <Button variant="ghost">Home</Button>
-            </Link>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                logout();
-                router.push('/login');
-              }}
+      <section className="flex min-h-[calc(100vh-2rem)] flex-col rounded-[30px] border border-[#e5e7eb] bg-white px-5 py-5 shadow-[0_10px_28px_rgba(15,23,42,0.05)] sm:px-6 sm:py-6 lg:ml-[292px]">
+        <div className="mb-5 flex items-center justify-between gap-4 border-b border-[#eef2f7] pb-4 lg:hidden">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileNavigationOpen(true)}
+              className="inline-flex size-10 items-center justify-center rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] text-[#0f172a]"
+              aria-expanded={mobileNavigationOpen}
+              aria-controls="dashboard-navigation-panel"
+              aria-label="Open navigation"
             >
-              <LogOut className="mr-2 size-4" />
-              Log out
-            </Button>
+              <Menu className="size-5" />
+            </button>
+            <div>
+              <p className="text-base font-semibold text-[#0f172a]">{title}</p>
+              <p className="text-xs text-[#64748b]">WOLFIX</p>
+            </div>
           </div>
+          <NetworkStatusChip />
         </div>
-        {children}
-        <div className="mt-8 border-t border-[var(--line)] pt-5 text-sm text-[var(--text-tertiary)]">
-          {isAdmin
-            ? 'WOLFIX operations keeps disputes, watchlists, and account controls inside one deliberate operating surface.'
-            : isVendor
-              ? 'WOLFIX studio keeps listings, delivery, communication, and payout readiness inside one business surface.'
-              : 'WOLFIX bookings keeps discovery, protected payment, communication, and delivery follow-up inside one buyer surface.'}
-        </div>
-      </section>
 
-      {mobileQuickActions ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 px-4 xl:hidden">
-          <div className="pointer-events-auto mx-auto max-w-[720px] rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(12,29,72,0.94),rgba(11,26,60,0.92))] p-3 shadow-[0_24px_64px_rgba(2,8,24,0.52)] backdrop-blur-2xl">
-            {mobileQuickActions}
+        {mobileNavigationOpen ? (
+          <div className="lg:hidden">
+            <div className="fixed inset-0 z-40 bg-[rgba(15,23,42,0.34)]" onClick={() => setMobileNavigationOpen(false)} aria-hidden="true" />
+            <div id="dashboard-navigation-panel" className="fixed inset-y-4 left-4 z-50 w-[min(18rem,calc(100vw-2rem))]">
+              <Sidebar
+                mobile
+                badgeCounts={sidebarBadgeCounts}
+                onNavigate={() => setMobileNavigationOpen(false)}
+                onClose={() => setMobileNavigationOpen(false)}
+                footerActions={sidebarFooter}
+              />
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+
+        <header className="mb-5 border-b border-[#eef2f7] pb-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h1 className="text-[1.9rem] font-semibold text-[#0f172a] sm:text-[2.2rem]">{title}</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[#64748b]">{subtitle}</p>
+            </div>
+            <div className="hidden items-center gap-3 lg:flex">
+              <NetworkStatusChip />
+              <div className="rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-4 py-2 text-sm text-[#475569]">{user.email}</div>
+            </div>
+          </div>
+        </header>
+
+        {mobileQuickActions ? <div className="mb-5 lg:hidden">{mobileQuickActions}</div> : null}
+
+        <div className="flex-1 space-y-6">{children}</div>
+
+        <MarketingFooter variant="compact" />
+      </section>
     </main>
+  );
+}
+
+export function DashboardLayoutFrame({ children }: PropsWithChildren) {
+  const [config, setConfig] = useState<DashboardShellConfig>(DEFAULT_DASHBOARD_CONFIG);
+  const [mobileActionsHost, setMobileActionsHost] = useState<HTMLDivElement | null>(null);
+
+  const updateConfig = useCallback((nextConfig: DashboardShellConfig) => {
+    setConfig((current) => {
+      if (current.title === nextConfig.title && current.subtitle === nextConfig.subtitle) {
+        return current;
+      }
+
+      return nextConfig;
+    });
+  }, []);
+
+  const contextValue = useMemo(
+    () => ({
+      config,
+      setConfig: updateConfig,
+      mobileActionsHost,
+    }),
+    [config, mobileActionsHost, updateConfig],
+  );
+
+  return (
+    <DashboardShellContext.Provider value={contextValue}>
+      <DashboardFrame title={config.title} subtitle={config.subtitle}>
+        <div ref={setMobileActionsHost} className="lg:hidden" />
+        {children}
+      </DashboardFrame>
+    </DashboardShellContext.Provider>
+  );
+}
+
+export function DashboardShell({ children, title, subtitle, mobileQuickActions }: DashboardShellProps) {
+  const context = useContext(DashboardShellContext);
+
+  useLayoutEffect(() => {
+    if (!context) {
+      return;
+    }
+
+    context.setConfig({ title, subtitle });
+  }, [context, subtitle, title]);
+
+  if (context) {
+    return (
+      <>
+        {mobileQuickActions && context.mobileActionsHost ? createPortal(<div className="mb-5">{mobileQuickActions}</div>, context.mobileActionsHost) : null}
+        {children}
+      </>
+    );
+  }
+
+  return (
+    <DashboardFrame title={title} subtitle={subtitle} mobileQuickActions={mobileQuickActions}>
+      {children}
+    </DashboardFrame>
   );
 }

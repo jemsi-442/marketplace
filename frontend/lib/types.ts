@@ -1,4 +1,4 @@
-export type AppRole = 'ROLE_ADMIN' | 'ROLE_VENDOR' | 'ROLE_USER';
+export type AppRole = 'ROLE_ADMIN' | 'ROLE_SUPER_ADMIN' | 'ROLE_VENDOR' | 'ROLE_USER' | 'ROLE_CLIENT';
 
 export interface AuthUser {
   id: number | null;
@@ -8,19 +8,27 @@ export interface AuthUser {
 }
 
 export interface AuthResponse {
-  token: string;
-  refresh_token: string;
   expires_in: number;
   user: AuthUser;
+}
+
+export interface RegistrationResponse {
+  user: AuthUser;
+  message?: string;
   verification_required?: boolean;
   verification_email_sent?: boolean;
   verification_url?: string;
 }
 
+export interface VerificationResponse {
+  message: string;
+  verified?: boolean;
+  verification_url?: string;
+}
+
 export interface RefreshResponse {
-  access_token: string;
-  refresh_token: string;
   expires_in: number;
+  user?: AuthUser;
 }
 
 export interface BackendHealth {
@@ -41,6 +49,31 @@ export interface VendorProfile {
   message?: string;
 }
 
+export interface VendorDashboardSummary {
+  active_capabilities: number;
+  approved_capabilities: number;
+  pending_capabilities: number;
+  returned_capabilities: number;
+  open_requests: number;
+  active_bookings: number;
+  protected_bookings: number;
+  available_balance_minor: number;
+  currency: string;
+}
+
+export interface ClientDashboardSummary {
+  visible_lane_count: number;
+  active_requests: number;
+  awaiting_payment_requests: number;
+  tracked_bookings: number;
+  active_bookings: number;
+  protected_bookings: number;
+  disputed_bookings: number;
+  protected_value_minor: number;
+  currency: string;
+  recent_bookings: BookingRecord[];
+}
+
 export interface AdminMetricsHealth {
   status: string;
   is_healthy: boolean;
@@ -49,6 +82,13 @@ export interface AdminMetricsHealth {
   message: string;
   last_snapshot_date?: string;
   snapshot_age_hours?: number;
+}
+
+export interface AdminDashboardSummary {
+  open_requests: number;
+  pending_capabilities: number;
+  active_bookings: number;
+  disputes: number;
 }
 
 export interface AdminMetricsTrendSummary {
@@ -80,23 +120,324 @@ export interface VendorProfileInput {
   portfolioLink?: string | null;
 }
 
-export interface ServiceListItem {
+export interface ServiceTypeRecord {
   id: number;
-  title: string;
+  name: string;
+  slug: string;
   description?: string | null;
   category?: string | null;
-  price_cents: number;
+  group_slug?: string | null;
+  group_title?: string | null;
   is_active: boolean;
-  vendor_user_id: number;
+  requires_admin_assignment: boolean;
+  default_brief_template?: string | null;
 }
 
-export type ServiceDetail = ServiceListItem;
-
-export interface ServiceUpsertInput {
+export interface ServiceGroupRecord {
+  slug: string;
   title: string;
-  description?: string | null;
-  category?: string | null;
-  price_cents: number;
+  eyebrow: string;
+  description: string;
+  hero_title: string;
+  hero_description: string;
+  search_placeholder: string;
+  category_labels: string[];
+  featured_services: string[];
+  service_count: number;
+}
+
+export interface ClientRequestRecord {
+  id: number;
+  service_type: {
+    id: number;
+    name: string;
+    slug: string;
+    category?: string | null;
+    requires_admin_assignment: boolean;
+  };
+  request_summary: string;
+  scope_details?: string | null;
+  deadline_note?: string | null;
+  budget_note?: string | null;
+  attachments_count?: number | null;
+  assignment_managed_by_platform: boolean;
+  vendor_identity_hidden_from_client: boolean;
+  agreed_price_minor?: number | null;
+  currency?: string | null;
+  agreed_timeline_note?: string | null;
+  admin_assignment_note?: string | null;
+  status: string;
+  submitted_at?: string | null;
+  matched_at?: string | null;
+  assigned_at?: string | null;
+  cancelled_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  unread_thread_count?: number;
+}
+
+export interface ClientRequestListResponse {
+  items: ClientRequestRecord[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  summary: {
+    total: number;
+    active: number;
+    awaiting_payment: number;
+    completed: number;
+  };
+}
+
+export interface ClientRequestCreateInput {
+  service_type_id: number;
+  request_summary: string;
+  scope_details?: string | null;
+  deadline_note?: string | null;
+  budget_note?: string | null;
+  attachments_count?: number | null;
+}
+
+export interface ClientRequestCreateResponse {
+  message: string;
+  request: ClientRequestRecord;
+}
+
+export interface ClientRequestBookingResponse {
+  message: string;
+  booking: {
+    id: number;
+    status: string;
+    request_summary: string;
+    amount_minor: number | null;
+    currency: string;
+  };
+}
+
+export interface VendorRequestFeedRecord {
+  id: number;
+  service_type: {
+    id: number;
+    name: string;
+    slug: string;
+    category?: string | null;
+    group_slug?: string | null;
+    group_title?: string | null;
+  };
+  request_summary: string;
+  scope_details?: string | null;
+  deadline_note?: string | null;
+  budget_note?: string | null;
+  status: string;
+  submitted_at?: string | null;
+  matched_at?: string | null;
+  unread_thread_count?: number;
+  capability: {
+    id: number;
+    experience_level?: string | null;
+    starting_price_minor?: number | null;
+    capacity_status?: string | null;
+    turnaround_note?: string | null;
+  };
+  interest?: {
+    id: number;
+    status: string;
+    submitted_at: string;
+  } | null;
+}
+
+export interface VendorRequestFeedListResponse {
+  items: VendorRequestFeedRecord[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  summary: {
+    total: number;
+    needs_proposal: number;
+    sent: number;
+  };
+}
+
+export interface VendorServiceCapabilityRecord {
+  id: number;
+  vendor?: {
+    id: number;
+    user_id?: number | null;
+    email?: string;
+    company_name?: string | null;
+  };
+  service_type: {
+    id: number;
+    name: string;
+    slug: string;
+    category?: string | null;
+    group_slug?: string | null;
+    group_title?: string | null;
+  };
+  is_active: boolean;
+  experience_level: string;
+  starting_price_minor?: number | null;
+  portfolio_summary?: string | null;
+  capacity_status: 'available' | 'limited' | 'unavailable' | string;
+  turnaround_note?: string | null;
+  approved_by_admin: boolean;
+  review_state?: 'pending' | 'approved' | 'returned' | string;
+  admin_review_note?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by_admin?: {
+    id: number | null;
+    email: string;
+  } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VendorServiceCapabilityInput {
+  service_type_id: number;
+  is_active: boolean;
+  experience_level: string;
+  starting_price_minor?: number | null;
+  portfolio_summary?: string | null;
+  capacity_status: 'available' | 'limited' | 'unavailable' | string;
+  turnaround_note?: string | null;
+}
+
+export interface VendorServiceCapabilityResponse {
+  message: string;
+  capabilities: VendorServiceCapabilityRecord[];
+}
+
+export interface AdminVendorCapabilityListResponse {
+  items: VendorServiceCapabilityRecord[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  summary: {
+    total: number;
+    pending: number;
+    approved: number;
+    returned: number;
+  };
+}
+
+export interface AdminVendorCapabilitySummary {
+  total: number;
+  pending: number;
+  approved: number;
+  returned: number;
+}
+
+export interface AdminVendorCapabilityReviewInput {
+  decision: 'approve' | 'return';
+  review_note?: string | null;
+}
+
+export interface AdminVendorCapabilityReviewResponse {
+  message: string;
+  capability: VendorServiceCapabilityRecord;
+}
+
+export interface VendorRequestInterestInput {
+  proposed_price_minor: number;
+  price_reason: string;
+  timeline_note: string;
+  message?: string | null;
+}
+
+export interface VendorRequestInterestResponse {
+  message: string;
+  interest: {
+    id: number;
+    request_id: number;
+    status: string;
+    submitted_at: string;
+  };
+}
+
+export interface AdminClientRequestRecord {
+  id: number;
+  client: {
+    id: number;
+    email: string;
+  };
+  service_type: {
+    id: number;
+    name: string;
+    slug: string;
+    category?: string | null;
+  };
+  request_summary: string;
+  scope_details?: string | null;
+  deadline_note?: string | null;
+  budget_note?: string | null;
+  attachments_count?: number | null;
+  selected_vendor?: {
+    id: number | null;
+    company_name?: string | null;
+    user_id?: number | null;
+  } | null;
+  assigned_by_admin_id?: number | null;
+  agreed_price_minor?: number | null;
+  currency?: string | null;
+  agreed_timeline_note?: string | null;
+  admin_assignment_note?: string | null;
+  status: string;
+  submitted_at?: string | null;
+  matched_at?: string | null;
+  assigned_at?: string | null;
+  created_at: string;
+}
+
+export interface AdminClientRequestListResponse {
+  items: AdminClientRequestRecord[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  summary: {
+    total: number;
+    open: number;
+    needs_review: number;
+    awaiting_payment: number;
+  };
+}
+
+export interface AdminVendorInterestRecord {
+  id: number;
+  vendor: {
+    id: number;
+    company_name?: string | null;
+    user_id: number;
+    email: string;
+  };
+  message?: string | null;
+  proposed_price_minor?: number | null;
+  price_reason?: string | null;
+  timeline_note?: string | null;
+  status: string;
+  submitted_at: string;
+  reviewed_at?: string | null;
+}
+
+export interface AdminClientRequestInterestsResponse {
+  request: AdminClientRequestRecord;
+  interests: AdminVendorInterestRecord[];
+}
+
+export interface AdminAssignClientRequestInput {
+  vendor_interest_id: number;
+  agreed_price_minor: number;
+  currency?: string;
+  agreed_timeline_note: string;
+  admin_assignment_note?: string | null;
+}
+
+export interface AdminAssignClientRequestResponse {
+  message: string;
+  request: AdminClientRequestRecord;
 }
 
 export interface BookingEscrowSummary {
@@ -105,28 +446,99 @@ export interface BookingEscrowSummary {
   status: string;
   amount_minor: number;
   currency: string;
+  disputed_at?: string | null;
+  resolved_at?: string | null;
+  dispute_reason?: string | null;
+  dispute_source?: string | null;
+  resolution?: string | null;
+  resolution_note?: string | null;
+  evidence_summary?: string | null;
+  tags?: string[];
 }
 
 export interface BookingRecord {
   id: number;
-  service_id: number;
   service_title: string;
+  service_category?: string | null;
+  service_price_cents?: number;
+  request_summary: string;
+  scope_details?: string | null;
+  deadline_note?: string | null;
+  vendor_user_id: number;
   client_id: number;
   status: string;
   created_at: string;
   escrow: BookingEscrowSummary | null;
+  unread_thread_count?: number;
 }
 
-export interface BookingCreateResponse {
-  message: string;
+export interface BookingSummary {
+  total: number;
+  active: number;
+  protected: number;
+  unread: number;
+}
+
+export interface BookingListResponse {
+  items: BookingRecord[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  summary: BookingSummary;
+}
+
+export interface BookingListOptions {
+  page?: number;
+  limit?: number;
+  view?: 'all' | 'active' | 'protected' | 'unread';
+  search?: string;
+}
+
+export interface DeliveryAttachmentRecord {
+  id: number;
+  file_name: string;
+  file_url: string;
+  mime_type?: string | null;
+  size_bytes?: number | null;
+  created_at: string;
+}
+
+export interface DeliveryRecord {
+  id: number;
   booking_id: number;
   status: string;
+  delivery_note: string;
+  delivery_link?: string | null;
+  attachments: DeliveryAttachmentRecord[];
+  review_note?: string | null;
+  submitted_at: string;
+  reviewed_at?: string | null;
+  vendor_user_id?: number | null;
+}
+
+export interface DeliveryActionResponse {
+  message: string;
+  deleted_delivery_id?: number;
+  deleted_attachment_id?: number;
+  booking_status?: string;
+  client_request_status?: string | null;
+  deliveries_remaining?: number;
+  delivery?: DeliveryRecord;
 }
 
 export interface EscrowActionResponse {
   message: string;
+  booking?: BookingRecord;
   escrow?: BookingEscrowSummary;
   escrow_status?: string;
+}
+
+export interface AdminEscrowResolutionInput {
+  release_to_vendor: boolean;
+  resolution_note?: string | null;
+  evidence_summary?: string | null;
+  tags?: string[];
 }
 
 export interface CollectionGatewayResponse {
@@ -148,6 +560,29 @@ export interface WithdrawalRecord {
   external_transaction_id?: string | null;
   created_at: string;
   completed_at?: string | null;
+}
+
+export interface WithdrawalListResponse {
+  items: WithdrawalRecord[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  summary: {
+    total: number;
+    pending: number;
+    processing: number;
+    paid: number;
+    failed: number;
+  };
+}
+
+export interface WithdrawalActionResponse {
+  id?: number;
+  reference?: string;
+  status?: string;
+  message: string;
+  withdrawal: WithdrawalRecord;
 }
 
 export interface WithdrawalSummary {
@@ -174,8 +609,22 @@ export interface DisputedEscrowRecord {
   status: string;
   amount_minor: number;
   currency: string;
-  client: string;
-  vendor: string;
+  client_label: string;
+  vendor_label: string;
+  disputed_at?: string | null;
+  dispute_reason?: string | null;
+  dispute_source?: string | null;
+}
+
+export interface AdminEscrowListResponse {
+  items: DisputedEscrowRecord[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  summary: {
+    disputed: number;
+  };
 }
 
 export interface ReviewRecord {
@@ -201,24 +650,93 @@ export interface NotificationRecord {
   createdAt: string;
 }
 
+export interface NotificationListResponse {
+  items: NotificationRecord[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  summary: {
+    total: number;
+    unread: number;
+    visible: number;
+  };
+}
+
+export interface NotificationSummary {
+  total: number;
+  unread: number;
+}
+
+export interface DashboardShellSummary {
+  notifications_unread: number;
+  request_threads_unread: number;
+  booking_threads_unread: number;
+  inbox_total_unread: number;
+  admin_pending_capabilities: number;
+  admin_disputed_escrows: number;
+}
+
+export interface NotificationActionResponse {
+  message: string;
+  notification: NotificationRecord;
+}
+
 export interface MessageRecord {
   id: number;
   senderId: number;
-  senderEmail: string;
+  senderLabel: string;
   receiverId: number;
-  receiverEmail: string;
+  receiverLabel: string;
   content: string;
+  clientRequestId?: number | null;
+  bookingId?: number | null;
+  readAt?: string | null;
   createdAt: string;
 }
 
 export interface MessageSendInput {
-  receiverId: number;
+  receiverId?: number;
   content: string;
+}
+
+export interface MessageUnreadSummary {
+  request_unread: number;
+  booking_unread: number;
+  total_unread: number;
+}
+
+export interface ThreadSummaryRecord {
+  thread_key: string;
+  kind: 'request' | 'booking';
+  id: number;
+  title: string;
+  subtitle: string;
+  status: string;
+  unread_count: number;
+  preview: string;
+  href: string;
+  participant_id?: number | null;
+  activity_at?: string | null;
+}
+
+export interface ThreadSummaryListResponse {
+  items: ThreadSummaryRecord[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  summary: {
+    total: number;
+    requests: number;
+    bookings: number;
+    unread: number;
+  };
 }
 
 export interface VendorTrustSummary {
   vendor_id: number;
-  vendor_email: string;
+  vendor_label: string;
   completed_jobs_count: number;
   dispute_count: number;
   average_rating: number;
@@ -243,7 +761,7 @@ export interface AdminRiskOverview {
   latest_fraud_risks: Array<{
     id: number;
     user_id: number;
-    email: string;
+    user_label: string;
     score: number;
     risk_level: string;
     reason: string;
@@ -256,6 +774,46 @@ export interface AdminUserRecord {
   id: number;
   email: string;
   roles: string[];
+  account_type: 'client' | 'vendor' | 'admin' | 'super_admin';
   is_verified: boolean;
   is_locked: boolean;
+  created_at: string;
+}
+
+export interface AdminUserListResponse {
+  items: AdminUserRecord[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  summary: {
+    total: number;
+    clients: number;
+    vendors: number;
+    admins: number;
+    locked: number;
+    unverified: number;
+  };
+}
+
+export interface AdminUserActionResponse {
+  message: string;
+  user?: AdminUserRecord;
+}
+
+export interface AdminUserInput {
+  email: string;
+  password?: string;
+  account_type: 'client' | 'vendor' | 'admin' | 'super_admin';
+  is_verified: boolean;
+  is_locked: boolean;
+}
+
+export interface AdminEscrowActionResponse {
+  message: string;
+  escrow: DisputedEscrowRecord;
+}
+
+export interface AdminEscrowSummary {
+  disputed_count: number;
 }

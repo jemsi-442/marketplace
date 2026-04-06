@@ -1,42 +1,62 @@
 @import 'tailwindcss';
 
 :root {
-  --brand-50: #eef4ff;
-  --brand-100: #dbe8ff;
-  --brand-200: #b8d0ff;
-  --brand-300: #84aeff;
-  --brand-400: #4e89ff;
-  --brand-500: #2f6bff;
-  --brand-600: #1f56e5;
-  --brand-700: #1942bc;
-  --brand-800: #16359a;
-  --brand-900: #122870;
+  --brand-50: #eef2ff;
+  --brand-100: #e0e7ff;
+  --brand-200: #c7d2fe;
+  --brand-300: #a5b4fc;
+  --brand-400: #818cf8;
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;
+  --brand-700: #4338ca;
+  --brand-800: #3730a3;
+  --brand-900: #312e81;
 
   --brand-primary: var(--brand-600);
   --brand-primary-strong: var(--brand-800);
-  --brand-secondary: var(--brand-200);
+  --brand-secondary: var(--brand-600);
+  --accent-cyan: #38bdf8;
+  --accent-teal: #14b8a6;
+  --accent-amber: #f59e0b;
+  --accent-coral: #f97316;
+  --accent-violet: #8b5cf6;
+  --accent-slate: #64748b;
 
-  --bg: #071225;
-  --bg-elevated: #0c1b3d;
-  --bg-deep: #061022;
+  --bg: #f4f7fb;
+  --bg-elevated: #ffffff;
+  --bg-deep: #07120e;
 
-  --panel: rgba(12, 28, 68, 0.72);
-  --panel-muted: rgba(15, 36, 82, 0.54);
-  --panel-strong: rgba(20, 46, 108, 0.82);
-  --line: rgba(155, 183, 238, 0.2);
-  --ring: rgba(78, 137, 255, 0.22);
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-muted: rgba(248, 250, 252, 0.96);
+  --panel-strong: rgba(255, 255, 255, 1);
+  --line: rgba(148, 163, 184, 0.24);
+  --ring: rgba(79, 70, 229, 0.18);
+  --nav-shell-bg: linear-gradient(180deg, #bcc7d3 0%, #b1bdca 52%, #a7b5c3 100%);
+  --nav-shell-border: rgba(30, 41, 59, 0.3);
+  --nav-shell-line: rgba(30, 41, 59, 0.18);
+  --nav-shell-chip: rgba(255, 255, 255, 0.34);
+  --nav-shell-hover: rgba(255, 255, 255, 0.4);
+  --nav-shell-icon: rgba(255, 255, 255, 0.22);
+  --nav-shell-shadow: 0 22px 46px rgba(15, 23, 42, 0.16);
+  --nav-shell-shadow-mobile: 0 26px 60px rgba(15, 23, 42, 0.26);
+  --nav-shell-text: #0f1d2d;
+  --nav-shell-muted: #435366;
+  --nav-shell-active: linear-gradient(180deg, #27405f 0%, #1a2f49 100%);
+  --nav-shell-active-shadow: 0 18px 36px rgba(26, 47, 73, 0.34);
+  --nav-shell-badge: #1b2b42;
+  --nav-shell-badge-bg: rgba(255, 255, 255, 0.52);
 
-  --ink-strong: #f7fffd;
-  --text-primary: #f2fbfd;
-  --text-secondary: #d9e5ff;
-  --text-tertiary: #9bb5ea;
-  --text-muted: #8096bc;
+  --ink-strong: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-tertiary: #64748b;
+  --text-muted: #94a3b8;
 
-  --shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.22);
-  --shadow-panel: 0 30px 80px rgba(0, 0, 0, 0.32);
+  --shadow-soft: 0 12px 30px rgba(15, 23, 42, 0.08);
+  --shadow-panel: 0 22px 60px rgba(15, 23, 42, 0.1);
 
-  --font-display-family: 'Avenir Next Condensed', 'Bahnschrift SemiCondensed', 'Arial Narrow', sans-serif;
-  --font-body-family: 'IBM Plex Sans', 'Aptos', 'Segoe UI Variable', 'Segoe UI', sans-serif;
+  --font-display-family: 'Avenir Next', 'Aptos Display', 'Segoe UI Variable Display', 'Segoe UI', sans-serif;
+  --font-body-family: 'IBM Plex Sans', 'Aptos', 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
 }
 
 @theme inline {
@@ -57,34 +77,7 @@ body {
   min-height: 100vh;
   color: var(--text-primary);
   font-family: var(--font-body-family);
-  background:
-    radial-gradient(circle at 14% 12%, rgba(78, 137, 255, 0.18), transparent 18%),
-    radial-gradient(circle at 82% 16%, rgba(184, 208, 255, 0.08), transparent 16%),
-    radial-gradient(circle at 50% 84%, rgba(78, 137, 255, 0.08), transparent 22%),
-    linear-gradient(145deg, #071225 0%, #0a1732 34%, #102a5f 72%, #16359a 100%);
-  background-attachment: fixed;
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent 85%);
-  opacity: 0.24;
-}
-
-body::after {
-  content: '';
-  position: fixed;
-  inset: auto 0 0 0;
-  height: 34vh;
-  pointer-events: none;
-  background: linear-gradient(180deg, transparent 0%, rgba(7, 18, 37, 0.22) 52%, rgba(7, 18, 37, 0.62) 100%);
+  background: #f3f4f6;
 }
 
 a {
@@ -103,40 +96,40 @@ input,
 textarea,
 select {
   width: 100%;
-  border-radius: 20px;
+  border-radius: 16px;
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(12, 28, 68, 0.84), rgba(19, 42, 98, 0.62));
+  background: rgba(255, 255, 255, 0.94);
   color: var(--text-primary);
-  padding: 0.95rem 1rem;
+  padding: 0.9rem 1rem;
   outline: none;
   transition:
     border-color 180ms ease,
     background-color 180ms ease,
     box-shadow 180ms ease,
     transform 180ms ease;
-  backdrop-filter: blur(18px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: rgba(207, 224, 230, 0.72);
+  color: rgba(100, 116, 139, 0.78);
 }
 
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: rgba(5, 47, 133, 0.34);
-  box-shadow: 0 0 0 4px rgba(78, 137, 255, 0.12);
-  background: linear-gradient(180deg, rgba(16, 34, 78, 0.92), rgba(24, 50, 116, 0.74));
+  border-color: rgba(99, 102, 241, 0.34);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  background: rgba(255, 255, 255, 1);
 }
 
 select option {
-  color: #08131a;
+  color: #0f172a;
 }
 
 ::selection {
-  background: rgba(6, 41, 110, 0.24);
-  color: #f7fffd;
+  background: rgba(99, 102, 241, 0.16);
+  color: #0f172a;
 }
 
 @keyframes slideInLeft {
@@ -178,7 +171,7 @@ select option {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-8px);
+    transform: translateY(-5px);
   }
 }
 
@@ -200,5 +193,19 @@ select option {
 }
 
 .animate-float {
-  animation: float 5.5s ease-in-out infinite;
+  animation: float 6.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

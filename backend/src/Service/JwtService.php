@@ -147,4 +147,9 @@ class JwtService
 
         $this->em->flush();
     }
+
+    public function getRefreshTtl(): int
+    {
+        return $this->refreshTtl;
+    }
 }

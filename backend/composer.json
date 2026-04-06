@@ -82,10 +82,40 @@
             "bash prepare_test_db.sh"
         ],
         "test:api": [
-            "php bin/phpunit tests/Api"
+            "@test:prepare-db",
+            "bash run_test_env_command.sh php bin/phpunit tests/Api"
+        ],
+        "test:api:security": [
+            "@test:prepare-db",
+            "bash run_test_env_command.sh php bin/phpunit tests/Api/SecurityHardeningFlowTest.php"
+        ],
+        "test:api:lists": [
+            "@test:prepare-db",
+            "bash run_test_env_command.sh php bin/phpunit tests/Api/ListEndpointsFlowTest.php"
+        ],
+        "test:api:disputes": [
+            "@test:prepare-db",
+            "bash run_test_env_command.sh php bin/phpunit tests/Api/EscrowDisputeFlowTest.php"
+        ],
+        "test:api:service-catalog": [
+            "@test:prepare-db",
+            "bash run_test_env_command.sh php bin/phpunit tests/Api/ServiceCatalogFlowTest.php"
+        ],
+        "test:api:withdrawal-ledger": [
+            "@test:prepare-db",
+            "bash run_test_env_command.sh php bin/phpunit tests/Api/WithdrawalLedgerFlowTest.php"
         ],
         "test:api:isolated": [
             "bash run_isolated_api_tests.sh"
+        ],
+        "test:runtime:flows": [
+            "bash test_runtime_marketplace_flows.sh"
+        ],
+        "provider:preflight": [
+            "bash bin/provider-preflight.sh"
+        ],
+        "seed:service-types": [
+            "php bin/console app:seed:service-types"
         ],
         "quality:fast": [
             "bash quality_gate.sh"

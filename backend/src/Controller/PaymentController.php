@@ -6,14 +6,18 @@ namespace App\Controller;
 
 use App\Entity\User;
 use App\Entity\Notification;
+use App\Exception\Domain\EscrowRequiresManualReviewException;
+use App\Exception\Domain\InvalidStateTransitionException;
 use App\Repository\EscrowRepository;
 use App\Service\EscrowService;
 use App\Service\NotificationService;
 use App\Service\SnippeWebhookProcessor;
+use App\Support\MobileMoneyProviderCatalog;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/payments')]
@@ -23,7 +27,8 @@ class PaymentController extends AbstractController
         private readonly EscrowService $escrowService,
         private readonly EscrowRepository $escrowRepository,
         private readonly SnippeWebhookProcessor $webhookProcessor,
-        private readonly NotificationService $notificationService
+        private readonly NotificationService $notificationService,
+        private readonly UrlGeneratorInterface $urlGenerator
     ) {
     }
 
@@ -52,24 +57,51 @@ class PaymentController extends AbstractController
 
         $msisdn = isset($payload['msisdn']) && is_string($payload['msisdn']) ? $payload['msisdn'] : '';
         $provider = isset($payload['provider']) && is_string($payload['provider']) ? $payload['provider'] : '';
-        $callbackUrl = isset($payload['callback_url']) && is_string($payload['callback_url'])
-            ? $payload['callback_url']
-            : '/api/payments/webhooks/collection';
-
         if ($msisdn === '' || $provider === '') {
             return $this->json(['error' => 'msisdn and provider are required'], 400);
         }
 
-        $response = $this->escrowService->initiateCollectionPayment($escrow, $msisdn, $provider, $callbackUrl);
+        $normalizedMsisdn = MobileMoneyProviderCatalog::normalizeTanzanianMsisdn($msisdn);
+        if ($normalizedMsisdn === null) {
+            return $this->json(['error' => 'Use a valid Tanzania mobile number such as 07XXXXXXXX or 2557XXXXXXX'], 400);
+        }
+
+        $normalizedProvider = MobileMoneyProviderCatalog::normalizeProvider($provider);
+        if ($normalizedProvider === null) {
+            return $this->json(['error' => 'Unsupported mobile money provider'], 400);
+        }
+
+        if ($escrow->getStatus() !== \App\Entity\Escrow::STATUS_CREATED) {
+            return $this->json(['error' => 'Payment prompt can only be sent while escrow is awaiting funding'], 409);
+        }
+
+        // The webhook callback is owned by the server so clients cannot redirect gateway events elsewhere.
+        $callbackUrl = $this->urlGenerator->generate('snippe_collection_webhook', [], UrlGeneratorInterface::ABSOLUTE_URL);
+
+        // This creates the collection request only. Escrow funding is confirmed later by webhook.
+        try {
+            $response = $this->escrowService->initiateCollectionPayment($escrow, $normalizedMsisdn, $normalizedProvider, $callbackUrl);
+        } catch (InvalidStateTransitionException) {
+            return $this->json(['error' => 'Payment prompt can only be sent while escrow is awaiting funding'], 409);
+        } catch (EscrowRequiresManualReviewException $exception) {
+            return $this->json(['error' => $exception->getMessage()], 409);
+        } catch (\InvalidArgumentException $exception) {
+            return $this->json(['error' => $exception->getMessage()], 400);
+        }
+
         $this->notificationService->notify(
             $user,
-            'Collection initiated',
-            sprintf('A collection session has been created for escrow %s via %s.', $escrow->getReference(), strtoupper($provider)),
+            'Payment prompt sent',
+            sprintf(
+                'A payment prompt has been sent for escrow %s via %s. Funding will be confirmed after the payment webhook.',
+                $escrow->getReference(),
+                MobileMoneyProviderCatalog::labelForCode($normalizedProvider)
+            ),
             Notification::CATEGORY_FINANCE
         );
 
         return $this->json([
-            'message' => 'Collection session created',
+            'message' => 'Payment prompt sent',
             'escrow_reference' => $escrow->getReference(),
             'gateway' => $response,
         ], 201);

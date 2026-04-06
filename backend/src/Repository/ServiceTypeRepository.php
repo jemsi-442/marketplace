@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
-use App\Entity\Service;
+use App\Entity\ServiceType;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
- * @extends ServiceEntityRepository<Service>
+ * @extends ServiceEntityRepository<ServiceType>
  */
-final class ServiceRepository extends ServiceEntityRepository
+final class ServiceTypeRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct(
             registry: $registry,
-            entityClass: Service::class
+            entityClass: ServiceType::class
         );
     }
 }

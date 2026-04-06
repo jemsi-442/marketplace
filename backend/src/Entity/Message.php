@@ -25,12 +25,23 @@ class Message
     #[ORM\JoinColumn(nullable: false)]
     private User $receiver;
 
+    #[ORM\ManyToOne(targetEntity: ClientRequest::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'CASCADE')]
+    private ?ClientRequest $clientRequest = null;
+
+    #[ORM\ManyToOne(targetEntity: Booking::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'CASCADE')]
+    private ?Booking $booking = null;
+
     #[ORM\Column(type: 'text')]
     #[Assert\NotBlank]
     private string $content = '';
 
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $readAt = null;
 
     public function __construct()
     {
@@ -67,6 +78,28 @@ class Message
         return $this;
     }
 
+    public function getClientRequest(): ?ClientRequest
+    {
+        return $this->clientRequest;
+    }
+
+    public function setClientRequest(?ClientRequest $clientRequest): self
+    {
+        $this->clientRequest = $clientRequest;
+        return $this;
+    }
+
+    public function getBooking(): ?Booking
+    {
+        return $this->booking;
+    }
+
+    public function setBooking(?Booking $booking): self
+    {
+        $this->booking = $booking;
+        return $this;
+    }
+
     public function getContent(): string
     {
         return $this->content;
@@ -81,5 +114,19 @@ class Message
     public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function getReadAt(): ?\DateTimeImmutable
+    {
+        return $this->readAt;
+    }
+
+    public function markRead(): self
+    {
+        if ($this->readAt === null) {
+            $this->readAt = new \DateTimeImmutable();
+        }
+
+        return $this;
     }
 }

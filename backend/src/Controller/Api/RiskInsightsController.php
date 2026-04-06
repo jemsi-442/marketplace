@@ -100,7 +100,7 @@ final class RiskInsightsController extends AbstractController
                 fn (FraudRisk $risk): array => [
                     'id' => $risk->getId(),
                     'user_id' => $risk->getUser()->getId(),
-                    'email' => $risk->getUser()->getEmail(),
+                    'user_label' => $this->maskUserLabel($risk->getUser()),
                     'score' => $risk->getScore(),
                     'risk_level' => $risk->getRiskLevel(),
                     'reason' => $risk->getReason(),
@@ -122,7 +122,7 @@ final class RiskInsightsController extends AbstractController
     {
         return [
             'vendor_id' => $profile->getVendor()->getId(),
-            'vendor_email' => $profile->getVendor()->getEmail(),
+            'vendor_label' => $this->maskUserLabel($profile->getVendor()),
             'completed_jobs_count' => $profile->getCompletedJobsCount(),
             'dispute_count' => $profile->getDisputeCount(),
             'average_rating' => $profile->getAverageRating(),
@@ -135,5 +135,15 @@ final class RiskInsightsController extends AbstractController
             'updated_at' => $profile->getUpdatedAt()->format(DATE_ATOM),
             'metadata' => $profile->getLastCalculationMetadata(),
         ];
+    }
+
+    private function maskUserLabel(User $user): string
+    {
+        $email = strtolower(trim($user->getEmail()));
+        $localPart = strtok($email, '@');
+        $localPart = is_string($localPart) ? $localPart : 'user';
+        $prefix = mb_substr($localPart, 0, min(3, max(1, mb_strlen($localPart))));
+
+        return sprintf('%s*** (#%d)', $prefix, $user->getId() ?? 0);
     }
 }

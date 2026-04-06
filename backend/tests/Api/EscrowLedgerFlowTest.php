@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace App\Tests\Api;
 
 use App\Entity\Booking;
-use App\Entity\Service as MarketplaceService;
-use App\Entity\VendorProfile;
 use App\Service\EscrowService;
 use App\Service\VendorWalletService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -240,24 +238,16 @@ final class EscrowLedgerFlowTest extends ApiTestCase
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get(EntityManagerInterface::class);
 
-        $vendorProfile = new VendorProfile();
-        $vendorProfile->setUser($vendor);
-        $vendorProfile->setCompanyName('Escrow Fixture Vendor');
-
-        $service = new MarketplaceService();
-        $service->setVendor($vendorProfile);
-        $service->setTitle($serviceTitle);
-        $service->setDescription('Escrow ledger integration fixture');
-        $service->setCategory('testing');
-        $service->setPriceCents(120000);
-
         $booking = new Booking();
         $booking->setClient($client);
-        $booking->setService($service);
+        $booking->setAssignedVendor($vendor);
+        $booking->setServiceTitleSnapshot($serviceTitle);
+        $booking->setServiceCategorySnapshot('testing');
+        $booking->setServicePriceSnapshotMinor(120000);
+        $booking->setAgreedPriceMinor(120000);
+        $booking->setCurrency('TZS');
         $booking->setStatus(Booking::STATUS_CONFIRMED);
 
-        $em->persist($vendorProfile);
-        $em->persist($service);
         $em->persist($booking);
         $em->flush();
 

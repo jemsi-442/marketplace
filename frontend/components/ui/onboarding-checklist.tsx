@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { ArrowRight, Compass, ShieldCheck, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -9,6 +10,30 @@ import type { AuthUser } from '@/lib/types';
 
 interface OnboardingChecklistProps {
   user: AuthUser | null;
+}
+
+function resolveLaneActionLabel(href: string): string {
+  if (href.includes('/dashboard/admin')) {
+    return 'Open operations desk';
+  }
+
+  if (href.includes('/dashboard/vendor')) {
+    return 'Open vendor studio';
+  }
+
+  if (href.includes('/dashboard/client')) {
+    return 'Open client lane';
+  }
+
+  if (href.includes('/dashboard/notifications')) {
+    return 'Open alerts lane';
+  }
+
+  if (href.includes('/dashboard/communications')) {
+    return 'Open inbox lane';
+  }
+
+  return 'Open next lane';
 }
 
 function resolveChecklist(user: AuthUser | null) {
@@ -31,11 +56,11 @@ function resolveChecklist(user: AuthUser | null) {
   if (isVendor) {
     return {
       key: 'vendor',
-      title: 'First time in the service studio?',
+      title: 'First time in the capability studio?',
       description: 'Use this checklist to set up your presence before focusing on delivery and earnings.',
       steps: [
         { label: 'Complete your business profile', href: '/dashboard/vendor' },
-        { label: 'Create your first service listing', href: '/dashboard/vendor' },
+        { label: 'Activate your first capability', href: '/dashboard/vendor-capabilities' },
         { label: 'Watch for new bookings and messages', href: '/dashboard/notifications' },
       ],
     };
@@ -46,8 +71,8 @@ function resolveChecklist(user: AuthUser | null) {
     title: 'First time in the bookings workspace?',
     description: 'This checklist helps you move from browsing to a protected booking without guessing.',
     steps: [
-      { label: 'Browse the service catalog', href: '/dashboard/client' },
-      { label: 'Create your first booking', href: '/dashboard/client' },
+      { label: 'Browse business lanes', href: '/dashboard/request-services' },
+      { label: 'Open your first lane request', href: '/dashboard/request-services' },
       { label: 'Track alerts and replies', href: '/dashboard/notifications' },
     ],
   };
@@ -68,6 +93,8 @@ export function OnboardingChecklist({ user }: OnboardingChecklistProps) {
   if (dismissed === null || dismissed) {
     return null;
   }
+
+  const stepIcons = [Compass, Sparkles, ShieldCheck];
 
   return (
     <Card>
@@ -90,12 +117,31 @@ export function OnboardingChecklist({ user }: OnboardingChecklistProps) {
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-3">
-        {checklist.steps.map((step, index) => (
-          <Link key={step.label} href={step.href} className="rounded-[22px] border border-[var(--line)] bg-[var(--panel-muted)] p-4 transition hover:bg-[var(--panel-strong)]">
-            <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Step {index + 1}</p>
-            <p className="mt-3 text-sm leading-6 text-[var(--text-primary)]">{step.label}</p>
-          </Link>
-        ))}
+        {checklist.steps.map((step, index) => {
+          const Icon = stepIcons[index] ?? Sparkles;
+
+          return (
+            <Link
+              key={step.label}
+              href={step.href}
+              className="rounded-[22px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] p-4 shadow-[0_12px_28px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Step {index + 1}</p>
+                  <p className="mt-3 text-sm leading-6 text-[var(--text-primary)]">{step.label}</p>
+                </div>
+                <div className="flex size-10 items-center justify-center rounded-2xl border border-[rgba(79,70,229,0.12)] bg-[rgba(79,70,229,0.08)] text-[var(--brand-primary)]">
+                  <Icon className="size-4" />
+                </div>
+              </div>
+              <div className="mt-4 inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-[var(--brand-secondary)]">
+                {resolveLaneActionLabel(step.href)}
+                <ArrowRight className="size-3.5" />
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </Card>
   );

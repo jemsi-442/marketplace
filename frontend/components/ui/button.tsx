@@ -8,9 +8,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: 'relative overflow-hidden bg-[linear-gradient(135deg,#4e89ff_0%,#2f6bff_42%,#16359a_100%)] px-5 py-3 text-[var(--ink-strong)] shadow-[0_16px_36px_rgba(12,34,104,0.34)] hover:translate-y-[-1px] hover:brightness-105 hover:shadow-[0_20px_40px_rgba(12,34,104,0.42)] before:pointer-events-none before:absolute before:inset-0 before:bg-[linear-gradient(180deg,rgba(255,255,255,0.18),transparent_48%)] before:opacity-80',
-        ghost: 'border border-[var(--line)] bg-[linear-gradient(180deg,rgba(14,31,74,0.8),rgba(20,44,102,0.58))] px-5 py-3 text-[var(--text-primary)] hover:-translate-y-[1px] hover:bg-[linear-gradient(180deg,rgba(18,40,92,0.9),rgba(26,54,122,0.72))] hover:shadow-[0_14px_32px_rgba(0,0,0,0.18)]',
-        quiet: 'px-3 py-2 text-[var(--text-secondary)] hover:-translate-y-[1px] hover:text-[var(--text-primary)]',
+        primary: 'relative overflow-hidden border border-[rgba(79,70,229,0.18)] bg-[linear-gradient(135deg,#6366f1_0%,#4f46e5_100%)] px-5 py-3 text-[var(--ink-strong)] shadow-[0_12px_28px_rgba(79,70,229,0.22)] hover:-translate-y-[1px] hover:brightness-[1.03] hover:shadow-[0_16px_34px_rgba(79,70,229,0.28)] before:pointer-events-none before:absolute before:inset-0 before:bg-[linear-gradient(180deg,rgba(255,255,255,0.18),transparent_48%)] before:opacity-70',
+        ghost: 'border border-[var(--line)] bg-[rgba(255,255,255,0.9)] px-5 py-3 text-[var(--text-primary)] hover:-translate-y-[1px] hover:bg-white hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]',
+        quiet: 'px-3 py-2 text-[var(--text-secondary)] hover:-translate-y-[1px] hover:text-[var(--brand-primary)]',
       },
       size: {
         default: 'h-11',

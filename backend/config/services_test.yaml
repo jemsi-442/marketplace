@@ -11,4 +11,7 @@ services:
             $baseUrl: '%env(default::SNIPPE_BASE_URL)%'
             $webhookSecret: '%env(default::SNIPPE_WEBHOOK_SECRET)%'
 
+    App\Tests\Double\FakeSocialAuthHttpClient: ~
+
     App\Service\SnippeClient: '@App\Tests\Double\FakeSnippeClient'
+    App\Service\SocialAuthHttpClient: '@App\Tests\Double\FakeSocialAuthHttpClient'

@@ -6,11 +6,11 @@ interface StatusBadgeProps {
 }
 
 const toneClasses: Record<NonNullable<StatusBadgeProps['tone']>, string> = {
-  neutral: 'border-[var(--line)] bg-[var(--panel-muted)] text-[var(--text-secondary)]',
-  info: 'border-[rgba(78,137,255,0.22)] bg-[rgba(47,107,255,0.12)] text-[var(--brand-secondary)]',
-  success: 'border-[rgba(83,214,146,0.22)] bg-[rgba(83,214,146,0.12)] text-[#8ef0b7]',
-  warning: 'border-[rgba(255,196,82,0.22)] bg-[rgba(255,196,82,0.12)] text-[#ffd47b]',
-  danger: 'border-[rgba(255,110,110,0.22)] bg-[rgba(255,110,110,0.12)] text-[#ffb3b3]',
+  neutral: 'border-[var(--line)] bg-[rgba(248,250,252,0.94)] text-[var(--text-secondary)]',
+  info: 'border-[rgba(99,102,241,0.16)] bg-[rgba(238,242,255,0.94)] text-[var(--brand-primary)]',
+  success: 'border-[rgba(34,197,94,0.16)] bg-[rgba(240,253,244,0.94)] text-emerald-700',
+  warning: 'border-[rgba(245,158,11,0.16)] bg-[rgba(255,251,235,0.94)] text-amber-700',
+  danger: 'border-[rgba(249,115,22,0.16)] bg-[rgba(255,247,237,0.94)] text-orange-700',
 };
 
 export function StatusBadge({ label, tone = 'neutral' }: StatusBadgeProps) {

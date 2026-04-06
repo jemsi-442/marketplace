@@ -28,6 +28,8 @@ final class AuthService
             throw new \DomainException('Email already exists');
         }
 
+        PasswordPolicy::validate($password);
+
         $user = new User();
         $user->setEmail($email);
         $user->setRoles([$role]);
@@ -41,11 +43,18 @@ final class AuthService
 
         $verification = $this->emailVerifier->sendVerificationEmail($user);
 
-        return $this->issueToken($user, [
+        return array_filter([
+            'message' => 'Account created. Verify your email before signing in.',
+            'user' => [
+                'id' => $user->getId(),
+                'email' => $user->getEmail(),
+                'roles' => $user->getRoles(),
+                'is_verified' => $user->isVerified(),
+            ],
             'verification_required' => true,
             'verification_email_sent' => $verification['sent'],
-            'verification_url' => $verification['verification_url'],
-        ]);
+            'verification_url' => $verification['verification_url'] ?? null,
+        ], static fn (mixed $value): bool => $value !== null);
     }
 
     /**

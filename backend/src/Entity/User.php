@@ -37,6 +37,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Assert\Length(min: 8)]
     private string $password;
 
+    #[ORM\Column(type: 'string', length: 191, unique: true, nullable: true)]
+    private ?string $googleId = null;
+
+    #[ORM\Column(type: 'string', length: 191, unique: true, nullable: true)]
+    private ?string $githubId = null;
+
     /* =========================
        SECURITY FLAGS
     ========================= */
@@ -137,6 +143,30 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setPassword(string $password): self
     {
         $this->password = $password;
+        return $this;
+    }
+
+    public function getGoogleId(): ?string
+    {
+        return $this->googleId;
+    }
+
+    public function setGoogleId(?string $googleId): self
+    {
+        $this->googleId = is_string($googleId) && trim($googleId) !== '' ? trim($googleId) : null;
+
+        return $this;
+    }
+
+    public function getGithubId(): ?string
+    {
+        return $this->githubId;
+    }
+
+    public function setGithubId(?string $githubId): self
+    {
+        $this->githubId = is_string($githubId) && trim($githubId) !== '' ? trim($githubId) : null;
+
         return $this;
     }
 

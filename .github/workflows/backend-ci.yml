@@ -63,5 +63,11 @@ jobs:
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
+      - name: Prepare Test Database
+        run: composer test:prepare-db
+
+      - name: Run Security Regression Suite
+        run: composer test:api:security
+
       - name: Run Quality Gate
         run: composer quality:ci

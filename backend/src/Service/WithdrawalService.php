@@ -6,8 +6,10 @@ namespace App\Service;
 
 use App\Entity\User;
 use App\Entity\WithdrawalRequest;
+use App\Exception\Domain\InvalidStateTransitionException;
 use App\Exception\Domain\UnauthorizedFinancialOperationException;
 use App\Repository\WithdrawalRequestRepository;
+use App\Support\MobileMoneyProviderCatalog;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -23,13 +25,30 @@ class WithdrawalService
     ) {
     }
 
+    private function isAdmin(User $user): bool
+    {
+        $roles = $user->getRoles();
+
+        return in_array('ROLE_ADMIN', $roles, true) || in_array('ROLE_SUPER_ADMIN', $roles, true);
+    }
+
     public function request(User $vendor, int $amountMinor, string $currency, string $msisdn, string $provider): WithdrawalRequest
     {
         if (!in_array('ROLE_VENDOR', $vendor->getRoles(), true)) {
             throw new UnauthorizedFinancialOperationException('Only vendors can request withdrawals.');
         }
 
-        return $this->em->wrapInTransaction(function () use ($vendor, $amountMinor, $currency, $msisdn, $provider): WithdrawalRequest {
+        $normalizedMsisdn = MobileMoneyProviderCatalog::normalizeTanzanianMsisdn($msisdn);
+        if ($normalizedMsisdn === null) {
+            throw new \InvalidArgumentException('Use a valid Tanzania mobile number such as 07XXXXXXXX or 2557XXXXXXX');
+        }
+
+        $normalizedProvider = MobileMoneyProviderCatalog::normalizeProvider($provider);
+        if ($normalizedProvider === null) {
+            throw new \InvalidArgumentException('Unsupported mobile money provider');
+        }
+
+        return $this->em->wrapInTransaction(function () use ($vendor, $amountMinor, $currency, $normalizedMsisdn, $normalizedProvider): WithdrawalRequest {
             $balance = $this->vendorWalletService->getVendorBalance($vendor, $currency);
             if ($balance < $amountMinor) {
                 throw new \RuntimeException('Insufficient wallet balance for withdrawal.');
@@ -52,7 +71,7 @@ class WithdrawalService
             }
 
             $reference = sprintf('wd_%s_%d', bin2hex(random_bytes(5)), $vendor->getId());
-            $withdrawal = new WithdrawalRequest($vendor, $reference, $amountMinor, $currency, $msisdn, $provider);
+            $withdrawal = new WithdrawalRequest($vendor, $reference, $amountMinor, $currency, $normalizedMsisdn, $normalizedProvider);
 
             $this->em->persist($withdrawal);
             $this->em->flush();
@@ -63,7 +82,7 @@ class WithdrawalService
 
     public function approve(WithdrawalRequest $withdrawal, User $admin, string $callbackUrl): void
     {
-        if (!in_array('ROLE_ADMIN', $admin->getRoles(), true)) {
+        if (!$this->isAdmin($admin)) {
             throw new UnauthorizedFinancialOperationException('Admin privileges required.');
         }
 
@@ -71,7 +90,7 @@ class WithdrawalService
             $this->em->lock($withdrawal, LockMode::PESSIMISTIC_WRITE);
 
             if ($withdrawal->getStatus() !== WithdrawalRequest::STATUS_REQUESTED) {
-                throw new \RuntimeException('Withdrawal is not in REQUESTED state.');
+                throw new InvalidStateTransitionException('Withdrawal is not in REQUESTED state.');
             }
 
             $feeMinor = $this->platformFeeService->calculateWithdrawalFee($withdrawal->getAmountMinor());
@@ -153,6 +172,10 @@ class WithdrawalService
             if ($status === 'SUCCESS') {
                 if ($withdrawal->getStatus() === WithdrawalRequest::STATUS_PAID && $withdrawal->getExternalTransactionId() === $externalTransactionId) {
                     return;
+                }
+
+                if ($externalTransactionId === '') {
+                    throw new \InvalidArgumentException('Payout success webhook missing transaction id.');
                 }
 
                 $withdrawal->markPaid($externalTransactionId, $payload);

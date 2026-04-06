@@ -5,19 +5,23 @@ import { MarketingPageShell } from '@/components/marketing/marketing-page-shell'
 const privacySections = [
   {
     title: 'Information We Use',
-    copy: 'WOLFIX uses account, communication, service, and marketplace activity data to support onboarding, workspace access, service delivery coordination, platform safety, and commercial reliability.',
+    copy: 'Account, service, communication, and marketplace activity data support access, delivery coordination, safety, and commercial reliability.',
+    icon: DatabaseZap,
   },
   {
     title: 'Why It Is Used',
-    copy: 'Information is used to maintain account access, support service operations, assist with delivery visibility, respond to support issues, and strengthen trust and safety controls across the marketplace.',
+    copy: 'Information supports account access, service operations, delivery visibility, support response, and trust controls across the marketplace.',
+    icon: EyeOff,
   },
   {
     title: 'How It Is Protected',
-    copy: 'WOLFIX applies access control, workflow discipline, and operational review to reduce misuse and protect platform data from unauthorised handling or abuse.',
+    copy: 'Access control, workflow discipline, and operational review reduce misuse and protect platform data from unauthorised handling.',
+    icon: LockKeyhole,
   },
   {
     title: 'User Expectations',
-    copy: 'Users should keep credentials private, use legitimate contact information, and avoid sharing sensitive project or business information outside the intended commercial workflow unless necessary for delivery.',
+    copy: 'Users should protect credentials, use legitimate contact information, and keep sensitive project information inside the intended workflow.',
+    icon: UserRoundCheck,
   },
 ];
 
@@ -25,35 +29,49 @@ export default function PrivacyPage() {
   return (
     <MarketingPageShell
       eyebrow="Privacy"
-      title="Privacy expectations built around commercial trust."
-      intro="WOLFIX handles marketplace information for service delivery, account management, and trust protection. This page explains the general expectations around how that information is used."
+      title="Privacy on WOLFIX."
+      intro="WOLFIX uses marketplace information for service delivery, account management, and trust protection. This page explains the general expectations around that use."
       aside={
         <>
           {[
-            ['Minimum necessary use', 'Information should support delivery, support, and safe marketplace operation.', EyeOff],
-            ['Secure handling', 'Account and marketplace information should be accessed only where needed.', LockKeyhole],
-            ['Operational oversight', 'Platform activity may be reviewed where necessary to preserve trust.', DatabaseZap],
-            ['Responsible user behaviour', 'Users should keep credentials and sensitive project details protected.', UserRoundCheck],
-          ].map(([title, copy, Icon]) => (
-            <div key={title as string} className="rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(18,40,92,0.8),rgba(14,31,74,0.62))] p-5">
+            { title: 'Necessary use', copy: 'Use data only where work or safety needs it.', Icon: EyeOff, tone: 'bg-[rgba(79,70,229,0.08)] text-[var(--brand-primary)]' },
+            { title: 'Secure handling', copy: 'Keep account and marketplace access limited.', Icon: LockKeyhole, tone: 'bg-[rgba(13,148,136,0.1)] text-[var(--accent-teal)]' },
+            { title: 'Operational review', copy: 'Platform activity may be reviewed to preserve trust.', Icon: DatabaseZap, tone: 'bg-[rgba(14,165,233,0.1)] text-[var(--accent-cyan)]' },
+            { title: 'User discipline', copy: 'Protect credentials and sensitive project detail.', Icon: UserRoundCheck, tone: 'bg-[rgba(245,158,11,0.12)] text-[var(--accent-amber)]' },
+          ].map(({ title, copy, Icon, tone }) => (
+            <div key={title as string} className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-strong)] p-5 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
               <div className="flex items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-[rgba(47,107,255,0.16)] text-[var(--brand-secondary)]">
+                <div className={`flex size-11 items-center justify-center rounded-2xl ${tone}`}>
                   <Icon className="size-5" />
                 </div>
-                <p className="font-medium text-[var(--text-primary)]">{title as string}</p>
+                <div>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Focus</p>
+                  <p className="font-medium text-[var(--text-primary)]">{title}</p>
+                </div>
               </div>
-              <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">{copy as string}</p>
+              <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">{copy}</p>
             </div>
           ))}
         </>
       }
     >
-      {privacySections.map((section) => (
+      {privacySections.map((section, index) => {
+        const Icon = section.icon;
+        return (
         <section key={section.title} className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-muted)] p-6">
-          <h2 className="font-display text-2xl text-[var(--text-primary)]">{section.title}</h2>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 text-[var(--brand-primary)]">
+              <div className="flex size-10 items-center justify-center rounded-2xl border border-[var(--line)] bg-white">
+                <Icon className="size-4" />
+              </div>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Section</p>
+            </div>
+            <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">{index + 1}</span>
+          </div>
+          <h2 className="mt-2 font-display text-2xl text-[var(--text-primary)]">{section.title}</h2>
           <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">{section.copy}</p>
         </section>
-      ))}
+      )})}
     </MarketingPageShell>
   );
 }

@@ -1,32 +1,26 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, BellRing, Landmark, MessageSquareMore, Search, ShieldAlert, WalletCards } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
-import { InlineStateNote } from '@/components/ui/inline-state-note';
-import { NextActionHint } from '@/components/ui/next-action-hint';
-import { PriorityBanner } from '@/components/ui/priority-banner';
-import { SectionNavigator } from '@/components/ui/section-navigator';
-import { SectionHeader } from '@/components/ui/section-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { WorkflowSteps } from '@/components/ui/workflow-steps';
-import { WorkspaceIdentityBanner } from '@/components/ui/workspace-identity-banner';
-import { WorkspaceGuide } from '@/components/ui/workspace-guide';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/auth/store';
+import { inferFeedbackTone } from '@/lib/ui/feedback-tone';
 import { useToastStore } from '@/lib/ui/toast-store';
-import type { NotificationRecord } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
 type NotificationCategory = 'all' | 'finance' | 'escrow' | 'message' | 'risk' | 'platform';
+
+const PAGE_SIZE = 10;
+const NOTIFICATIONS_STALE_MS = 60_000;
 
 const categoryMeta = {
   all: { label: 'All', icon: BellRing },
@@ -37,70 +31,40 @@ const categoryMeta = {
   platform: { label: 'Platform', icon: AlertTriangle },
 } satisfies Record<NotificationCategory, { label: string; icon: typeof BellRing }>;
 
-function detectNotificationCategory(notification: NotificationRecord): Exclude<NotificationCategory, 'all'> {
-  if (
-    notification.category === 'finance' ||
-    notification.category === 'escrow' ||
-    notification.category === 'message' ||
-    notification.category === 'risk' ||
-    notification.category === 'platform'
-  ) {
-    return notification.category;
+function formatDateTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
   }
-
-  const haystack = `${notification.title} ${notification.message}`.toLowerCase();
-
-  if (haystack.includes('withdraw') || haystack.includes('payout') || haystack.includes('wallet') || haystack.includes('payment') || haystack.includes('fee')) {
-    return 'finance';
-  }
-
-  if (haystack.includes('escrow') || haystack.includes('booking') || haystack.includes('release') || haystack.includes('dispute') || haystack.includes('refund')) {
-    return 'escrow';
-  }
-
-  if (haystack.includes('message') || haystack.includes('inbox') || haystack.includes('conversation') || haystack.includes('reply')) {
-    return 'message';
-  }
-
-  if (haystack.includes('risk') || haystack.includes('fraud') || haystack.includes('trust') || haystack.includes('lock') || haystack.includes('anomaly')) {
-    return 'risk';
-  }
-
-  return 'platform';
-}
-
-function getNotificationActionHint(category: Exclude<NotificationCategory, 'all'>): string {
-  switch (category) {
-    case 'finance':
-      return 'Open the related payout or payment workflow if money movement now needs attention.';
-    case 'escrow':
-      return 'Go to the booking or escrow workspace when the alert affects delivery confirmation or dispute state.';
-    case 'message':
-      return 'Open the inbox or the related booking if a reply or clarification is needed.';
-    case 'risk':
-      return 'Review the trust or account context carefully before taking any restrictive action.';
-    default:
-      return 'Read the alert fully, then move into the workspace it relates to if action is still needed.';
-  }
+  return parsed.toLocaleString('en-TZ');
 }
 
 export default function NotificationsPage() {
   const token = useAuthStore((state) => state.token);
-  const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
+  const pushToast = useToastStore((state) => state.push);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [categoryFilter, setCategoryFilter] = useState<NotificationCategory>('all');
   const [notificationSearch, setNotificationSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const pushToast = useToastStore((state) => state.push);
-  const isAdmin = user?.roles.includes('ROLE_ADMIN') ?? false;
-  const isVendor = user?.roles.includes('ROLE_VENDOR') ?? false;
-  const notificationsTone = isAdmin ? 'admin' : isVendor ? 'vendor' : 'client';
+  const [pendingNotificationId, setPendingNotificationId] = useState<number | null>(null);
 
   const notifications = useQuery({
-    queryKey: ['notifications-page', token],
-    queryFn: () => apiClient.getNotifications(token ?? ''),
+    queryKey: ['notifications-page', token, filter, categoryFilter, notificationSearch, page],
+    queryFn: () =>
+      apiClient.getNotifications(token ?? '', {
+        page,
+        limit: PAGE_SIZE,
+        search: notificationSearch.trim(),
+        view: filter,
+        category: categoryFilter,
+      }),
     enabled: Boolean(token),
+    staleTime: NOTIFICATIONS_STALE_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
 
   const markRead = useMutation({
@@ -108,540 +72,192 @@ export default function NotificationsPage() {
       if (!token) {
         throw new Error('Authentication token missing');
       }
-
+      setPendingNotificationId(notificationId);
       return apiClient.markNotificationRead(token, notificationId);
     },
-    onSuccess: async (response) => {
-      setFeedback(response.message);
-      pushToast({
-        title: 'Alert updated',
-        message: 'The notification was marked as read.',
-        tone: 'success',
-      });
+    onSuccess: async () => {
+      setFeedback('Alert marked as read.');
+      pushToast({ title: 'Alert updated', message: 'The alert was marked as read.', tone: 'success' });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['notifications-page'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard-notifications'] }),
+        queryClient.invalidateQueries({ queryKey: ['notification-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-shell-summary'] }),
       ]);
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : 'Unable to mark notification as read';
+      const message = error instanceof Error ? error.message : 'Unable to mark alert as read';
       setFeedback(message);
-      pushToast({
-        title: 'Alert update failed',
-        message,
-        tone: 'danger',
-      });
+      pushToast({ title: 'Alert update failed', message, tone: 'danger' });
+    },
+    onSettled: () => {
+      setPendingNotificationId(null);
     },
   });
 
-  const visibleNotifications = useMemo(() => {
-    const items = notifications.data ?? [];
+  const paginatedNotifications = notifications.data?.items ?? [];
+  const unreadCount = notifications.data?.summary.unread ?? 0;
+  const totalPages = notifications.data?.total_pages ?? 1;
+  const currentPage = Math.min(page, totalPages);
 
-    return items.filter((item) => {
-      const category = detectNotificationCategory(item);
-      const matchesReadState = filter === 'unread' ? !item.isRead : true;
-      const matchesCategory = categoryFilter === 'all' ? true : category === categoryFilter;
-      const searchHaystack = `${item.title} ${item.message}`.toLowerCase();
-      const matchesSearch = notificationSearch.trim().length === 0 || searchHaystack.includes(notificationSearch.trim().toLowerCase());
+  const applyReadFilter = (nextFilter: typeof filter) => {
+    setFilter(nextFilter);
+    setPage(1);
+  };
 
-      return matchesReadState && matchesCategory && matchesSearch;
-    });
-  }, [categoryFilter, filter, notificationSearch, notifications.data]);
-
-  const unreadCount = notifications.data?.filter((item) => !item.isRead).length ?? 0;
-  const categoryCounts = useMemo(() => {
-    const counts: Record<Exclude<NotificationCategory, 'all'>, number> = {
-      finance: 0,
-      escrow: 0,
-      message: 0,
-      risk: 0,
-      platform: 0,
-    };
-
-    for (const item of notifications.data ?? []) {
-      counts[detectNotificationCategory(item)] += 1;
-    }
-
-    return counts;
-  }, [notifications.data]);
-  const highlightCards: Array<{ category: Exclude<NotificationCategory, 'all'>; count: number }> = [
-    { category: 'finance', count: categoryCounts.finance },
-    { category: 'escrow', count: categoryCounts.escrow },
-    { category: 'message', count: categoryCounts.message },
-    { category: 'risk', count: categoryCounts.risk },
-  ];
-  const currentFeedLabel =
-    notificationSearch.trim().length > 0
-      ? `Showing ${visibleNotifications.length} alert${visibleNotifications.length === 1 ? '' : 's'} for "${notificationSearch.trim()}" in the current alert view.`
-      : categoryFilter === 'all'
-      ? filter === 'unread'
-        ? `Showing ${unreadCount} unread alert${unreadCount === 1 ? '' : 's'} from every lane.`
-        : `Showing ${notifications.data?.length ?? 0} alert${(notifications.data?.length ?? 0) === 1 ? '' : 's'} from every lane.`
-      : `Showing ${visibleNotifications.length} ${categoryMeta[categoryFilter].label.toLowerCase()} alert${visibleNotifications.length === 1 ? '' : 's'} in the current view.`;
-  const hasAlertFilters = filter !== 'all' || categoryFilter !== 'all' || notificationSearch.trim().length > 0;
-  const financeUnreadCount = useMemo(
-    () => (notifications.data ?? []).filter((item) => !item.isRead && detectNotificationCategory(item) === 'finance').length,
-    [notifications.data],
-  );
-  const riskUnreadCount = useMemo(
-    () => (notifications.data ?? []).filter((item) => !item.isRead && detectNotificationCategory(item) === 'risk').length,
-    [notifications.data],
-  );
-  const notificationsPriority = riskUnreadCount
-    ? {
-        title: 'Risk alerts should be reviewed before the rest of the alert queue',
-        description: 'Start with unread risk signals so trust or account-safety decisions are never delayed behind lower-stakes updates.',
-        tone: 'risk' as const,
-      }
-    : financeUnreadCount
-      ? {
-          title: 'Finance alerts are waiting for the next review',
-          description: 'Open unread finance signals next so payment, payout, or wallet movement does not sit in the queue longer than necessary.',
-          tone: 'finance' as const,
-        }
-      : unreadCount
-        ? {
-            title: 'Unread alerts are ready for a quick triage pass',
-            description: 'Use the unread view first, then move into the related workspace only if the alert still needs action.',
-            tone: 'activity' as const,
-          }
-        : hasAlertFilters
-          ? {
-              title: 'Your current alert filters are narrowing the view',
-              description: 'Reset the alert view if you want to return to the full stream before deciding what deserves attention next.',
-              tone: 'guidance' as const,
-            }
-          : {
-              title: 'The alert queue is currently calm',
-              description: 'No unread item is forcing the next move, so you can scan by category or return to the wider workspace deliberately.',
-              tone: 'communication' as const,
-            };
-
-  function getNotificationActionLinks(category: Exclude<NotificationCategory, 'all'>): Array<{ href: string; label: string }> {
-    switch (category) {
-      case 'finance':
-        return [{ href: isAdmin ? '/dashboard/admin' : '/dashboard/vendor', label: 'Open finance desk' }];
-      case 'escrow':
-        return [{ href: '/dashboard/client', label: 'Open bookings' }, { href: '/dashboard/bookings/1', label: 'Open booking desk' }];
-      case 'message':
-        return [{ href: '/dashboard/communications', label: 'Open inbox' }];
-      case 'risk':
-        return [{ href: isAdmin ? '/dashboard/admin' : '/dashboard', label: 'Open risk view' }];
-      default:
-        return [{ href: '/dashboard', label: 'Open overview' }];
-    }
-  }
+  const applyCategoryFilter = (nextFilter: NotificationCategory) => {
+    setCategoryFilter(nextFilter);
+    setPage(1);
+  };
 
   return (
     <DashboardShell
-      title="Notification center"
-      subtitle="Keep important marketplace alerts visible, organised, and easy to act on across finance, delivery, messages, and account safety."
+      title="Alerts"
+      subtitle="Read alerts here, then open the related page only when the alert still needs attention."
       mobileQuickActions={
-        <div className="grid grid-cols-3 gap-2">
-          <Link href="#notifications-summary">
-            <Button size="sm" variant="ghost" className="w-full">Summary</Button>
-          </Link>
-          <Link href="#notifications-feed">
-            <Button size="sm" className="w-full">Feed</Button>
-          </Link>
-          <Link href="#notifications-note">
-            <Button size="sm" variant="ghost" className="w-full">Guide</Button>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="w-full rounded-2xl border border-[var(--line)]"
+            onClick={() => applyReadFilter(filter === 'unread' ? 'all' : 'unread')}
+          >
+            {filter === 'unread' ? 'Show all' : 'Show unread'}
+          </Button>
+          <Link href="/dashboard/communications">
+            <Button size="sm" variant="ghost" className="w-full rounded-2xl border border-[var(--line)]">Open inbox</Button>
           </Link>
         </div>
       }
     >
-      <div className="animate-fade-up">
-        <WorkspaceGuide
-        eyebrow="How to use notifications"
-        title="This page helps you decide which alert needs attention first"
-        description="Read the alert category and message first, then move into the related workspace only if the alert still needs action. Not every notification requires a response."
-        points={[
-          'Use unread alerts to see what changed recently.',
-          'Use categories to separate finance, delivery, messages, risk, and platform signals.',
-          'Mark an alert as read after you understand it, not before.',
-          'If an alert is tied to live work, continue from the related booking, service, inbox, or operations desk.',
-        ]}
-        tip="Treat this page as your alert triage point. Understand first, then act in the correct workspace."
-        />
-      </div>
+      <div className="space-y-6">
+        {feedback ? <FeedbackBanner message={feedback} tone={inferFeedbackTone(feedback)} onDismiss={() => setFeedback(null)} /> : null}
 
-      <div className="animate-fade-up-delayed" style={{ ['--stagger-delay' as string]: '20ms' }}>
-        <WorkspaceIdentityBanner
-          tone={notificationsTone}
-          title={
-            isAdmin
-              ? 'This alert queue exists to prioritise platform intervention'
-              : isVendor
-                ? 'This alert queue exists to protect studio flow and payout awareness'
-                : 'This alert queue exists to keep bookings and payment steps visible'
-          }
-          description={
-            isAdmin
-              ? 'Treat alerts as the front door to disputes, account risk, and finance review. Start here when a signal appears, then move into operations for the actual decision.'
-              : isVendor
-                ? 'Treat alerts as the signal layer for new delivery, replies, trust movement, or payout-related changes before you jump into deeper studio work.'
-                : 'Treat alerts as your cue for escrow, replies, delivery changes, and payment movement before you dive back into the booking itself.'
-          }
-          highlights={
-            isAdmin
-              ? [
-                  'Unread risk should outrank softer platform updates.',
-                  'Alerts point to work; they are not the work itself.',
-                  'Move into operations once priority is clear.',
-                ]
-              : isVendor
-                ? [
-                    'Use alerts to catch delivery and payout changes early.',
-                    'Read the signal, then switch to the studio or inbox.',
-                    'Do not leave important updates buried in the feed.',
-                  ]
-              : [
-                  'Use alerts to catch payment and delivery changes quickly.',
-                  'Unread items should guide what booking to open next.',
-                  'Return to bookings once the next step is clear.',
-                ]
-          }
-          actions={
-            <>
-              <Button size="sm" onClick={() => document.getElementById('notifications-feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
-                Open alert feed
-              </Button>
-              <Link href={isAdmin ? '/dashboard/admin' : isVendor ? '/dashboard/vendor' : '/dashboard/client'}>
-                <Button size="sm" variant="ghost">Return to workspace</Button>
-              </Link>
-            </>
-          }
-        />
-      </div>
-
-      <div className="mt-6 animate-fade-up-delayed" style={{ ['--stagger-delay' as string]: '40ms' }}>
-        <WorkflowSteps
-          eyebrow="Typical alert flow"
-          title="The cleanest way to handle notifications"
-          steps={[
-            { title: 'Check unread items', description: 'See which new signals appeared since the last session.' },
-            { title: 'Filter by category', description: 'Separate finance, escrow, message, risk, and general platform alerts.' },
-            { title: 'Read for context', description: 'Understand whether the alert is informational or requires a real action.' },
-            { title: 'Continue in the right place', description: 'Move to bookings, inbox, services, or operations when action is necessary.' },
-          ]}
-        />
-      </div>
-
-      <div className="animate-fade-up-delayed" style={{ ['--stagger-delay' as string]: '80ms' }}>
-        <SectionNavigator
-          className="mt-6"
-          title="Move through alerts without losing context"
-          description="Use these anchors when you want the summary first, the alert feed itself, or the closing guide note."
-          items={[
-            { href: '#notifications-summary', label: 'Summary', helper: 'See alert totals by lane.' },
-            { href: '#notifications-feed', label: 'Feed', helper: 'Filter and act on real alerts.' },
-            { href: '#notifications-note', label: 'Guide', helper: 'Keep alert handling disciplined.' },
-          ]}
-        />
-      </div>
-
-      <div className="mt-6 animate-fade-up-delayed" style={{ ['--stagger-delay' as string]: '120ms' }}>
-        <PriorityBanner
-          title={notificationsPriority.title}
-          description={notificationsPriority.description}
-          tone={notificationsPriority.tone}
-          actions={
-            <>
-              <Button
-                size="sm"
-                variant={unreadCount ? 'primary' : 'ghost'}
-                onClick={() => {
-                  setFilter('unread');
-                  document.getElementById('notifications-feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-              >
-                Show unread
-              </Button>
-              <Button
-                size="sm"
-                variant={riskUnreadCount ? 'primary' : 'ghost'}
-                onClick={() => {
-                  setFilter('unread');
-                  setCategoryFilter('risk');
-                  document.getElementById('notifications-feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-              >
-                Focus risk
-              </Button>
-              <Button
-                size="sm"
-                variant={financeUnreadCount ? 'primary' : 'ghost'}
-                onClick={() => {
-                  setFilter('unread');
-                  setCategoryFilter('finance');
-                  document.getElementById('notifications-feed')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-              >
-                Focus finance
-              </Button>
-              {hasAlertFilters ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setFilter('all');
-                    setCategoryFilter('all');
-                    setNotificationSearch('');
-                  }}
-                >
-                  Reset alert view
-                </Button>
-              ) : null}
-            </>
-          }
-        />
-      </div>
-
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <Card variant="activity">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">Unread alerts</p>
-          <p className="mt-3 font-display text-3xl text-[var(--text-primary)]">{unreadCount}</p>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">Signals that still need to be reviewed or cleared.</p>
-        </Card>
-        <Card variant="finance">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">Unread finance</p>
-          <p className="mt-3 font-display text-3xl text-[var(--text-primary)]">{financeUnreadCount}</p>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">Payment and payout alerts still waiting in the queue.</p>
-        </Card>
-        <Card variant="risk">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">Unread risk</p>
-          <p className="mt-3 font-display text-3xl text-[var(--text-primary)]">{riskUnreadCount}</p>
-          <p className="mt-2 text-sm text-[var(--text-secondary)]">Risk and trust alerts that still need review.</p>
-        </Card>
-      </div>
-
-      <div id="notifications-summary" className="grid gap-5 md:grid-cols-4 scroll-mt-24">
-        {highlightCards.map(({ category, count }) => {
-          const Icon = categoryMeta[category].icon;
-
-          return (
-            <Card key={category}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-tertiary)]">{categoryMeta[category].label}</p>
-                  <p className="mt-3 font-display text-4xl text-[var(--text-primary)]">{count}</p>
-                  <p className="mt-2 text-sm text-[var(--text-secondary)]">Alerts in this WOLFIX lane.</p>
-                </div>
-                <div className="flex size-11 items-center justify-center rounded-2xl bg-[rgba(78,137,255,0.12)] text-[var(--brand-primary)]">
-                  <Icon className="size-5" />
-                </div>
-              </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <button type="button" onClick={() => applyReadFilter('all')} className={`text-left ${filter === 'all' ? 'translate-y-[-1px]' : ''}`}>
+            <Card className="rounded-[22px] border border-[rgba(15,23,42,0.08)] p-4 transition hover:border-[rgba(79,70,229,0.18)] hover:shadow-[0_10px_24px_rgba(79,70,229,0.08)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-tertiary)]">All alerts</p>
+              <p className="mt-2 text-2xl font-semibold text-[var(--text-primary)] sm:text-3xl">{notifications.data?.summary.total ?? 0}</p>
             </Card>
-          );
-        })}
-      </div>
-
-      <Card id="notifications-feed" variant="risk" className="scroll-mt-24">
-        <SectionHeader
-          eyebrow="Alert feed"
-          title="User-facing system signals"
-          description={`${unreadCount} unread notification${unreadCount === 1 ? '' : 's'} across the current user session.`}
-          variant="risk"
-          actions={
-            <>
-              <Button variant={filter === 'all' ? 'primary' : 'ghost'} size="sm" onClick={() => setFilter('all')}>
-                All
-              </Button>
-              <Button variant={filter === 'unread' ? 'primary' : 'ghost'} size="sm" onClick={() => setFilter('unread')}>
-                Unread
-              </Button>
-            </>
-          }
-        />
-
-        <div className="mt-5 flex flex-wrap gap-3">
-          <div className="w-full space-y-2">
-            <label className="text-sm text-[var(--text-secondary)]" htmlFor="notification-search">Search alerts</label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
-              <input
-                id="notification-search"
-                value={notificationSearch}
-                onChange={(event) => setNotificationSearch(event.target.value)}
-                placeholder="Search alert titles or messages..."
-                className="pl-11"
-              />
-            </div>
-          </div>
-          {(Object.keys(categoryMeta) as NotificationCategory[]).map((category) => {
-            const Icon = categoryMeta[category].icon;
-            const count = category === 'all'
-              ? notifications.data?.length ?? 0
-              : categoryCounts[category];
-
-            return (
-              <button
-                key={category}
-                type="button"
-                onClick={() => setCategoryFilter(category)}
-                className={cn(
-                  'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs uppercase tracking-[0.16em] transition',
-                  categoryFilter === category
-                    ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] text-[var(--ink-strong)]'
-                    : 'border-[var(--line)] bg-[var(--panel-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
-                )}
-              >
-                <Icon className="size-3.5" />
-                <span>{categoryMeta[category].label}</span>
-                <span className={cn('rounded-full px-2 py-0.5 text-[10px]', categoryFilter === category ? 'bg-white/20' : 'bg-[rgba(78,137,255,0.12)] text-[var(--brand-secondary)]')}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-          {hasAlertFilters ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setFilter('all');
-                setCategoryFilter('all');
-                setNotificationSearch('');
-              }}
-            >
-              Reset view
-            </Button>
-          ) : null}
+          </button>
+          <button type="button" onClick={() => applyReadFilter('unread')} className={`text-left ${filter === 'unread' ? 'translate-y-[-1px]' : ''}`}>
+            <Card className="rounded-[22px] border border-[rgba(15,23,42,0.08)] p-4 transition hover:border-[rgba(79,70,229,0.18)] hover:shadow-[0_10px_24px_rgba(79,70,229,0.08)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Unread</p>
+              <p className="mt-2 text-2xl font-semibold text-[var(--text-primary)] sm:text-3xl">{unreadCount}</p>
+            </Card>
+          </button>
+          <button type="button" onClick={() => {
+            applyReadFilter('all');
+            applyCategoryFilter('all');
+          }} className="text-left">
+            <Card className="rounded-[22px] border border-[rgba(15,23,42,0.08)] p-4 transition hover:border-[rgba(79,70,229,0.18)] hover:shadow-[0_10px_24px_rgba(79,70,229,0.08)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Visible</p>
+              <p className="mt-2 text-2xl font-semibold text-[var(--text-primary)] sm:text-3xl">{notifications.data?.summary.visible ?? 0}</p>
+            </Card>
+          </button>
         </div>
 
-        {feedback ? (
-          <div className="mt-5">
-            <FeedbackBanner message={feedback} tone="info" onDismiss={() => setFeedback(null)} />
-          </div>
-        ) : null}
-
-        <div className="mt-5">
-          <InlineStateNote
-            tone={filter === 'unread' || categoryFilter !== 'all' ? 'success' : 'info'}
-            message={currentFeedLabel}
-          />
-        </div>
-
-        <div className="mt-5 space-y-4">
-          {notifications.isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-28 w-full" />
-              <Skeleton className="h-28 w-full" />
-              <Skeleton className="h-28 w-full" />
+        <Card className="rounded-[28px] border border-[rgba(15,23,42,0.08)] p-5 sm:p-6">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 rounded-2xl border border-[var(--line)] bg-white px-4 py-3">
+                <Search className="size-4 text-[var(--text-secondary)]" />
+                <input
+                  value={notificationSearch}
+                  onChange={(event) => {
+                    setNotificationSearch(event.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search alerts"
+                  className="w-full border-none bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(Object.entries(categoryMeta) as Array<[NotificationCategory, { label: string; icon: typeof BellRing }]>).map(([key, meta]) => {
+                  const active = categoryFilter === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => applyCategoryFilter(key)}
+                      className={active ? 'rounded-full border border-[var(--brand-primary)] bg-[rgba(59,130,246,0.10)] px-4 py-2 text-sm font-medium text-[var(--brand-primary)]' : 'rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--text-primary)]'}
+                    >
+                      {meta.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          ) : null}
-          {notifications.isError ? (
-            <FeedbackBanner
-              message={notifications.error instanceof Error ? notifications.error.message : 'Unable to load notifications'}
-              tone="danger"
-            />
-          ) : null}
-          {visibleNotifications.map((notification, index) => {
-            const category = detectNotificationCategory(notification);
-            const categoryTone =
-              category === 'risk'
-                ? 'danger'
-                : category === 'finance'
-                  ? 'warning'
-                  : category === 'message'
-                    ? 'info'
-                    : category === 'escrow'
-                      ? 'success'
-                      : 'neutral';
+            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[220px]" />
+          </div>
+        </Card>
 
-            const shellClass =
-              category === 'risk'
-                ? 'border-[rgba(255,151,182,0.2)] bg-[linear-gradient(180deg,rgba(58,18,48,0.56),rgba(108,36,74,0.4))]'
-                : category === 'finance'
-                  ? 'border-[rgba(170,180,255,0.2)] bg-[linear-gradient(180deg,rgba(20,26,84,0.62),rgba(32,47,132,0.42))]'
-                  : category === 'message'
-                    ? 'border-[rgba(124,194,255,0.2)] bg-[linear-gradient(180deg,rgba(8,42,86,0.62),rgba(15,63,120,0.42))]'
-                    : category === 'escrow'
-                      ? 'border-[rgba(123,165,255,0.2)] bg-[linear-gradient(180deg,rgba(12,35,91,0.62),rgba(18,64,134,0.42))]'
-                      : 'border-[rgba(184,208,255,0.16)] bg-[rgba(255,255,255,0.04)]';
+        <Card className="rounded-[28px] border border-[rgba(15,23,42,0.08)] p-5 sm:p-6">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-primary)]">Alert list</p>
+            <h2 className="text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">Read one alert at a time</h2>
+          </div>
 
-            return (
-              <div
-                key={notification.id}
-                className={cn('rounded-[24px] border p-5 transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_54px_rgba(0,0,0,0.24)] animate-fade-up-delayed', shellClass)}
-                style={{ ['--stagger-delay' as string]: `${index * 50}ms` }}
-              >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">{notification.createdAt}</p>
-                    <p className="mt-2 font-display text-xl text-[var(--text-primary)]">{notification.title}</p>
-                    <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">{notification.message}</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <StatusBadge label={categoryMeta[category].label} tone={categoryTone} />
-                    <StatusBadge label={notification.isRead ? 'read' : 'unread'} tone={notification.isRead ? 'neutral' : 'info'} />
+          <div className="mt-5 space-y-3">
+            {notifications.isLoading ? (
+              Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-28 rounded-[22px]" />)
+            ) : null}
+
+            {!notifications.isLoading && paginatedNotifications.length === 0 ? (
+              <EmptyState icon={<BellRing className="size-5" />} title="No alerts in this view" description="Change the search or filter, or wait for the next platform alert." />
+            ) : null}
+
+            {paginatedNotifications.map((notification) => {
+              const category = (notification.category && notification.category in categoryMeta
+                ? notification.category
+                : 'platform') as Exclude<NotificationCategory, 'all'>;
+              const meta = categoryMeta[category];
+              const Icon = meta.icon;
+
+              return (
+                <div key={notification.id} className="rounded-[22px] border border-[var(--line)] bg-[var(--panel-muted)] p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex gap-4">
+                      <div className="flex size-11 items-center justify-center rounded-2xl border border-[var(--line)] bg-white text-[var(--brand-primary)]">
+                        <Icon className="size-5" />
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-lg font-semibold text-[var(--text-primary)]">{notification.title}</p>
+                          {!notification.isRead ? <StatusBadge label="Unread" tone="warning" /> : <StatusBadge label="Read" tone="neutral" />}
+                          <StatusBadge label={meta.label} tone="info" />
+                        </div>
+                        <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">{notification.message}</p>
+                        <p className="mt-3 text-xs text-[var(--text-secondary)]">{formatDateTime(notification.createdAt)}</p>
+                      </div>
+                    </div>
                     {!notification.isRead ? (
-                      <Button size="sm" variant="ghost" onClick={() => markRead.mutate(notification.id)} disabled={markRead.isPending}>
-                        Mark as read
+                      <Button className="w-full sm:w-auto" size="sm" onClick={() => markRead.mutate(notification.id)} disabled={markRead.isPending && pendingNotificationId === notification.id}>
+                        {markRead.isPending && pendingNotificationId === notification.id ? 'Updating...' : 'Mark read'}
                       </Button>
                     ) : null}
                   </div>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {getNotificationActionLinks(category).map((action) => (
-                    <Link key={`${notification.id}-${action.href}-${action.label}`} href={action.href}>
-                      <Button size="sm" variant="ghost">{action.label}</Button>
-                    </Link>
-                  ))}
-                </div>
-                <NextActionHint label={getNotificationActionHint(category)} />
-              </div>
-            );
-          })}
-          {!notifications.isLoading && !visibleNotifications.length ? (
-            <EmptyState
-              icon={<BellRing className="size-5" />}
-              title={filter === 'unread' ? 'No unread notifications here' : 'No notifications match this view'}
-              description={filter === 'unread'
-                ? categoryFilter === 'all'
-                  ? 'Every alert currently in the queue has already been reviewed, so you can return to the wider workspace or scan the full feed.'
-                  : `All ${categoryMeta[categoryFilter].label.toLowerCase()} alerts in this filtered view are already cleared or read.`
-                : 'The current search or category is hiding the feed. Reset the alert view or move into the lane most likely to produce the next real signal.'}
-              action={
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setFilter('all');
-                      setCategoryFilter('all');
-                    }}
-                  >
-                    Reset view
-                  </Button>
-                  <Link href={categoryFilter === 'risk' ? (isAdmin ? '/dashboard/admin' : '/dashboard') : categoryFilter === 'finance' ? (isAdmin ? '/dashboard/admin' : isVendor ? '/dashboard/vendor' : '/dashboard/client') : isAdmin ? '/dashboard/admin' : isVendor ? '/dashboard/vendor' : '/dashboard/client'}>
-                    <Button variant="ghost">
-                      Open related workspace
-                    </Button>
-                  </Link>
-                  <Link href={isAdmin ? '/dashboard/admin' : isVendor ? '/dashboard/vendor' : '/dashboard/client'}>
-                    <Button variant="ghost">Open workspace</Button>
-                  </Link>
-                </div>
-              }
-            />
-          ) : null}
-        </div>
-      </Card>
+              );
+            })}
 
-      <Card id="notifications-note" variant="activity" className="mt-6 scroll-mt-24">
-        <div className="flex items-start gap-4">
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,rgba(12,35,91,0.62),rgba(18,64,134,0.42))] text-[var(--brand-secondary)]">
-            <BellRing className="size-5" />
+            {totalPages > 1 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-[var(--line)] bg-white px-4 py-4">
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Page {currentPage} of {totalPages}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button className="w-full sm:w-auto" variant="ghost" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage === 1}>
+                    Previous
+                  </Button>
+                  <Button className="w-full sm:w-auto" variant="ghost" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage === totalPages}>
+                    Next
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
-          <div>
-            <p className="font-display text-xl tracking-[-0.03em] text-[var(--text-primary)] drop-shadow-[0_16px_28px_rgba(47,107,255,0.12)]">Operational note</p>
-            <p className="mt-2 max-w-3xl text-sm leading-7 text-[var(--text-secondary)]">
-              This page is designed to keep new alerts clear and easy to review as more marketplace activity appears over time.
-            </p>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
     </DashboardShell>
   );
 }

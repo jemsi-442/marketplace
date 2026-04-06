@@ -8,28 +8,43 @@ use App\Entity\User;
 use App\Security\BookingVoter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/api/reviews')]
 class ReviewController extends AbstractController
 {
+    private const MAX_COMMENT_LENGTH = 1500;
+
+    public function __construct(
+        #[Autowire(service: 'limiter.review_create')]
+        private readonly RateLimiterFactory $reviewCreateLimiter,
+    ) {
+    }
+
     #[Route('/vendor/{vendorId}', methods: ['GET'])]
     public function listForVendor(
         int $vendorId,
+        Request $request,
         EntityManagerInterface $em
     ): JsonResponse {
+        $limit = max(1, min((int) $request->query->get('limit', 20), 50));
+
         /** @var array<int, Review> $reviews */
         $reviews = $em->getRepository(Review::class)->createQueryBuilder('r')
             ->join('r.booking', 'b')
-            ->join('b.service', 's')
-            ->join('s.vendor', 'vp')
-            ->join('vp.user', 'vu')
-            ->where('vu.id = :vendorId')
+            ->leftJoin('b.assignedVendor', 'av')
+            ->leftJoin('b.clientRequest', 'cr')
+            ->leftJoin('cr.selectedVendor', 'sv')
+            ->leftJoin('sv.user', 'svu')
+            ->where('av.id = :vendorId OR svu.id = :vendorId')
             ->setParameter('vendorId', $vendorId)
             ->orderBy('r.createdAt', 'DESC')
+            ->setMaxResults($limit)
             ->getQuery()
             ->getResult();
 
@@ -79,6 +94,14 @@ class ReviewController extends AbstractController
             ], 400);
         }
 
+        $commentRaw = $data['comment'] ?? null;
+        $comment = is_string($commentRaw) ? trim($commentRaw) : null;
+        if ($comment !== null && $comment !== '' && mb_strlen($comment) > self::MAX_COMMENT_LENGTH) {
+            return $this->json([
+                'error' => sprintf('Comment must not exceed %d characters', self::MAX_COMMENT_LENGTH),
+            ], 400);
+        }
+
         /** @var Booking|null $booking */
         $booking = $em->getRepository(Booking::class)
             ->find((int) $bookingId);
@@ -110,20 +133,30 @@ class ReviewController extends AbstractController
             ], 409);
         }
 
-        $vendorUser = $booking->getService()->getVendor()->getUser();
+        $limiter = $this->reviewCreateLimiter->create(sprintf('%d|%s', $user->getId() ?? 0, $request->getClientIp() ?? 'unknown'));
+        if (!$limiter->consume()->isAccepted()) {
+            return $this->json([
+                'error' => 'Too many review attempts. Please try again later.',
+            ], 429);
+        }
 
         $review = new Review();
         $review->setBooking($booking);
         $review->setRating($rating);
-
-        $comment = $data['comment'] ?? null;
-        $review->setComment(is_string($comment) ? $comment : null);
+        $review->setComment($comment !== '' ? $comment : null);
 
         $em->persist($review);
         $em->flush();
 
         return $this->json([
-            'message' => 'Review submitted successfully'
+            'message' => 'Review submitted successfully',
+            'review' => [
+                'id' => $review->getId(),
+                'booking_id' => $booking->getId(),
+                'rating' => $review->getRating(),
+                'comment' => $review->getComment(),
+                'created_at' => $review->getCreatedAt()->format('Y-m-d H:i:s'),
+            ],
         ], 201);
     }
 }

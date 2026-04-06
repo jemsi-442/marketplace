@@ -23,6 +23,7 @@ security:
             pattern: ^/api
             stateless: true
             provider: app_user_provider
+            entry_point: App\Security\JwtAuthenticator
             custom_authenticators:
                 - App\Security\JwtAuthenticator
 
@@ -33,10 +34,15 @@ security:
         - { path: ^/api/auth/refresh, roles: PUBLIC_ACCESS }
         - { path: ^/api/refresh, roles: PUBLIC_ACCESS }
         - { path: ^/api/auth/verify-email, roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/resend-verification, roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/oauth, roles: PUBLIC_ACCESS }
+        - { path: ^/api/auth/logout, roles: PUBLIC_ACCESS }
+        - { path: ^/api/logout, roles: PUBLIC_ACCESS }
         - { route: snippe_collection_webhook, roles: PUBLIC_ACCESS }
         - { route: snippe_payout_webhook, roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: ROLE_USER }
 
     role_hierarchy:
-        ROLE_ADMIN: [ROLE_USER, ROLE_VENDOR]
+        ROLE_SUPER_ADMIN: [ROLE_ADMIN]
+        ROLE_ADMIN: [ROLE_USER]
         ROLE_VENDOR: [ROLE_USER]

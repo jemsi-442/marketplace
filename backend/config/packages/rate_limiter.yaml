@@ -9,3 +9,28 @@ framework:
             policy: 'sliding_window'
             limit: 5
             interval: '1 minute'
+
+        resend_verification:
+            policy: 'sliding_window'
+            limit: 3
+            interval: '15 minutes'
+
+        ai_question:
+            policy: 'sliding_window'
+            limit: 10
+            interval: '1 minute'
+
+        message_send:
+            policy: 'sliding_window'
+            limit: 20
+            interval: '1 minute'
+
+        review_create:
+            policy: 'sliding_window'
+            limit: 5
+            interval: '10 minutes'
+
+        client_request_create:
+            policy: 'sliding_window'
+            limit: 5
+            interval: '10 minutes'

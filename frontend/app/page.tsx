@@ -1,25 +1,95 @@
 import Link from 'next/link';
-import { ArrowRight, BanknoteArrowDown, BriefcaseBusiness, ShieldCheck, Sparkles, Wallet } from 'lucide-react';
+import { Activity, ArrowRight, BanknoteArrowDown, BriefcaseBusiness, MessageSquareMore, ShieldCheck, Sparkles, Wallet, Workflow } from 'lucide-react';
 
 import { HeroVisual } from '@/components/marketing/hero-visual';
 import { MarketingHeader } from '@/components/layout/marketing-header';
 import { StatCard } from '@/components/dashboard/stat-card';
+import { InstallCtaButton } from '@/components/pwa/install-cta-button';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
 const pillars = [
   {
     title: 'Software Engineering',
-    copy: 'Web apps, product delivery, automation, and digital product work can move through one protected workflow.',
+    copy: 'Web apps, automation, and product delivery move through one protected lane.',
+    icon: Activity,
   },
   {
     title: 'Design and Brand Systems',
-    copy: 'Graphic design, UI kits, branding work, motion assets, and digital creative delivery sit beside engineering in the same marketplace.',
+    copy: 'Brand systems, UI kits, motion assets, and digital creative work stay beside engineering.',
+    icon: Sparkles,
   },
   {
     title: 'Managed Digital Growth',
-    copy: 'Social media management, SEO, campaign support, content operations, and digital retainers can be sold with the same trust controls.',
+    copy: 'SEO, campaigns, content operations, and retainers use the same trust controls.',
+    icon: Workflow,
   },
+];
+
+const workflowCards = [
+  {
+    title: 'Book clearly',
+    copy: 'Open the work with the right service, price, and scope already visible.',
+    icon: BriefcaseBusiness,
+    variant: 'market' as const,
+  },
+  {
+    title: 'Protect payment',
+    copy: 'Escrow and collection steps keep money movement attached to the same workflow.',
+    icon: Wallet,
+    variant: 'finance' as const,
+  },
+  {
+    title: 'Run delivery',
+    copy: 'Messages, progress, and next actions stay tied to the live booking lane.',
+    icon: Workflow,
+    variant: 'activity' as const,
+  },
+  {
+    title: 'Close with proof',
+    copy: 'Reviews, alerts, and trust signals stay visible after the work is delivered.',
+    icon: ShieldCheck,
+    variant: 'communication' as const,
+  },
+];
+
+const homeSignalCards = [
+  { title: 'Protected flow', value: 'Booking, payment, and delivery share one path.', icon: Wallet, tone: 'text-[var(--accent-teal)] bg-[rgba(13,148,136,0.1)]' },
+  { title: 'Clear service desk', value: 'Clients and vendors move with confidence.', icon: BriefcaseBusiness, tone: 'text-[var(--brand-primary)] bg-[rgba(79,70,229,0.08)]' },
+  { title: 'Operational rhythm', value: 'Updates and decisions stay in one lane.', icon: Workflow, tone: 'text-[var(--accent-cyan)] bg-[rgba(14,165,233,0.1)]' },
+];
+
+const homeEntryActions = [
+  { label: 'Sign in to workspace', hint: 'Return to your live lane', href: '/login', variant: 'primary' as const },
+  { label: 'Create account', hint: 'Open a client or vendor lane', href: '/register', variant: 'ghost' as const },
+  { label: 'Preview dashboards', hint: 'See the command center first', href: '/dashboard', variant: 'ghost' as const },
+];
+
+const requestLaneCards = [
+  { label: 'Software', copy: 'Apps, automation, product builds', icon: Activity, tone: 'text-[var(--brand-primary)] bg-[rgba(79,70,229,0.08)]' },
+  { label: 'Design', copy: 'Brand systems, UI/UX, motion', icon: Sparkles, tone: 'text-[var(--accent-violet)] bg-[rgba(139,92,246,0.1)]' },
+  { label: 'Growth', copy: 'Campaigns, content, social ops', icon: Workflow, tone: 'text-[var(--accent-cyan)] bg-[rgba(14,165,233,0.1)]' },
+  { label: 'Retainers', copy: 'SEO, analytics, digital support', icon: ShieldCheck, tone: 'text-[var(--accent-amber)] bg-[rgba(245,158,11,0.12)]' },
+];
+
+const consultationCards = [
+  { title: 'Call / WhatsApp', value: '+255 622 670 772', copy: 'Direct project line', icon: Wallet, tone: 'text-[var(--accent-teal)] bg-[rgba(13,148,136,0.1)]' },
+  { title: 'Alternate Contact', value: '+255 683 186 987', copy: 'Backup coordination line', icon: MessageSquareMore, tone: 'text-[var(--accent-cyan)] bg-[rgba(14,165,233,0.1)]' },
+  { title: 'Email', value: 'wolfixagency84@gmail.com', copy: 'Scope and follow-up', icon: Sparkles, tone: 'text-[var(--brand-primary)] bg-[rgba(79,70,229,0.08)]' },
+  { title: 'Location', value: 'Mlimani City, Dar es Salaam', copy: 'Meetings and discovery', icon: ShieldCheck, tone: 'text-[var(--accent-amber)] bg-[rgba(245,158,11,0.12)]' },
+];
+
+const closingSignalCards = [
+  { title: 'Client lane', value: 'Book with clarity', icon: BriefcaseBusiness, tone: 'text-[var(--brand-primary)] bg-[rgba(79,70,229,0.08)]' },
+  { title: 'Protected flow', value: 'Keep value attached', icon: Wallet, tone: 'text-[var(--accent-teal)] bg-[rgba(13,148,136,0.1)]' },
+  { title: 'Delivery lane', value: 'Track proof live', icon: Workflow, tone: 'text-[var(--accent-cyan)] bg-[rgba(14,165,233,0.1)]' },
+  { title: 'Support layer', value: 'Notes, alerts, AI', icon: Sparkles, tone: 'text-[var(--accent-violet)] bg-[rgba(139,92,246,0.1)]' },
+];
+
+const platformLaneCards = [
+  { label: 'Client lane', value: 'Book and track', icon: BriefcaseBusiness, tone: 'text-[var(--brand-primary)] bg-[rgba(79,70,229,0.08)]' },
+  { label: 'Protected flow', value: 'Escrow linked', icon: Wallet, tone: 'text-[var(--accent-teal)] bg-[rgba(13,148,136,0.1)]' },
+  { label: 'Delivery lane', value: 'Messages attached', icon: MessageSquareMore, tone: 'text-[var(--accent-cyan)] bg-[rgba(14,165,233,0.1)]' },
 ];
 
 export default function HomePage() {
@@ -27,9 +97,9 @@ export default function HomePage() {
     <main className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-8 lg:px-8">
       <MarketingHeader />
 
-      <section className="mb-10 grid gap-8 overflow-hidden rounded-[36px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(8,20,48,0.92),rgba(13,30,74,0.82))] px-6 py-6 shadow-[var(--shadow-panel)] backdrop-blur-2xl lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-8">
+      <section className="mb-10 grid gap-8 overflow-hidden rounded-[36px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))] px-6 py-6 shadow-[var(--shadow-panel)] backdrop-blur-2xl lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-8">
         <div className="relative z-10 flex flex-col justify-center">
-          <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--line)] bg-[rgba(18,40,92,0.74)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--brand-secondary)]">
+          <div className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-[rgba(79,70,229,0.14)] bg-[rgba(79,70,229,0.06)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--brand-secondary)]">
             <BriefcaseBusiness className="size-4" />
             Managed marketplace for premium digital work
           </div>
@@ -42,28 +112,36 @@ export default function HomePage() {
             </p>
           </div>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/login">
-              <Button>
-                Open workspace
-                <ArrowRight className="ml-2 size-4" />
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button variant="ghost">Create account</Button>
-            </Link>
-            <Link href="/dashboard">
-              <Button variant="ghost">Preview dashboards</Button>
-            </Link>
+            {homeEntryActions.map((action) => (
+              <Link key={action.label} href={action.href}>
+                <Button variant={action.variant === 'primary' ? undefined : action.variant}>
+                  {action.label}
+                  {action.variant === 'primary' ? <ArrowRight className="ml-2 size-4" /> : null}
+                </Button>
+              </Link>
+            ))}
+            <InstallCtaButton variant="ghost" />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {homeEntryActions.map((action) => (
+              <span
+                key={action.label}
+                className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[var(--text-secondary)]"
+              >
+                {action.hint}
+              </span>
+            ))}
           </div>
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            {[
-              ['Protected commercial flow', 'Booking, payment, delivery, and support share one path.'],
-              ['Premium service experience', 'Clients and providers move through every step with clarity and confidence.'],
-              ['Operational clarity', 'Work, updates, and decisions stay organised from kickoff to delivery.'],
-            ].map(([title, copy]) => (
-              <div key={title} className="rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(18,40,92,0.72),rgba(14,31,74,0.5))] p-4">
-                <p className="font-medium text-[var(--text-primary)]">{title}</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{copy}</p>
+            {homeSignalCards.map(({ title, value, icon: Icon, tone }) => (
+              <div key={title} className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-strong)] p-4 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+                <div className="flex items-center gap-3">
+                  <div className={`flex size-10 items-center justify-center rounded-2xl ${tone}`}>
+                    <Icon className="size-4" />
+                  </div>
+                  <p className="font-medium text-[var(--text-primary)]">{title}</p>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">{value}</p>
               </div>
             ))}
           </div>
@@ -73,10 +151,20 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="how-it-works" className="grid gap-5 md:grid-cols-3">
-        <StatCard eyebrow="Protected flow" value="Secure" detail="Booking, delivery, support, and payments stay inside one secure operating surface." icon={<ShieldCheck className="size-8" />} />
-        <StatCard eyebrow="Digital lanes" value="Engineering + Design" detail="Software delivery, graphic design, social media support, and other digital services live in one commercial system." icon={<Wallet className="size-8" />} />
-        <StatCard eyebrow="Automation layer" value="Risk-aware" detail="Future AI services plug into the product without weakening the financial core." icon={<Sparkles className="size-8" />} />
+      <section id="how-it-works" className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        {workflowCards.map((item) => {
+          const Icon = item.icon;
+          return (
+            <StatCard
+              key={item.title}
+              eyebrow="Workflow"
+              value={item.title}
+              detail={item.copy}
+              icon={<Icon className="size-8" />}
+              variant={item.variant}
+            />
+          );
+        })}
       </section>
 
       <section id="about-wolfix" className="mt-8 grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
@@ -88,41 +176,92 @@ export default function HomePage() {
                 WOLFIX DIGITAL AGENCY can operate this as a premium digital marketplace for software engineering, graphical design, social media
                 management, branding, UI/UX, automation, and other remote digital services without losing financial control.
               </p>
+              <div className="mt-6 rounded-[24px] border border-[var(--line)] bg-[var(--panel-muted)] p-5">
+                <div className="grid gap-3 md:grid-cols-3">
+                  {platformLaneCards.map(({ label, value, icon: Icon, tone }) => (
+                    <div key={label} className="rounded-[18px] border border-[var(--line)] bg-white p-4">
+                      <div className="flex items-center gap-2">
+                        <div className={`flex size-8 items-center justify-center rounded-2xl ${tone}`}>
+                          <Icon className="size-4" />
+                        </div>
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">{label}</p>
+                      </div>
+                      <p className="mt-3 text-sm font-medium text-[var(--text-primary)]">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="mt-8 grid gap-4 md:grid-cols-3">
-                {pillars.map((pillar) => (
-                  <div key={pillar.title} className="rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(18,40,92,0.84),rgba(14,31,74,0.66))] p-5">
-                    <p className="mb-3 font-display text-xl text-[var(--text-primary)]">{pillar.title}</p>
+                {pillars.map((pillar) => {
+                  const Icon = pillar.icon;
+                  return (
+                  <div key={pillar.title} className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-strong)] p-5 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                    <div className="mb-3 flex items-center gap-3">
+                      <div className="flex size-10 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--panel-muted)] text-[var(--brand-primary)]">
+                        <Icon className="size-4" />
+                      </div>
+                      <p className="font-display text-xl text-[var(--text-primary)]">{pillar.title}</p>
+                    </div>
                     <p className="text-sm leading-6 text-[var(--text-secondary)]">{pillar.copy}</p>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
             <div id="delivery-standards" className="relative p-8">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(65,205,189,0.14),transparent_48%)]" />
-              <div className="relative rounded-[28px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(18,40,92,0.9),rgba(14,31,74,0.72))] p-6">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(65,205,189,0.12),transparent_48%)]" />
+              <div className="relative rounded-[28px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(240,249,255,0.94))] p-6">
                 <p className="mb-2 text-xs uppercase tracking-[0.2em] text-[var(--brand-secondary)]">Marketplace lanes</p>
                 <h2 className="font-display text-2xl text-[var(--text-primary)]">What WOLFIX can host</h2>
-                <ul className="mt-5 space-y-4 text-sm text-[var(--text-secondary)]">
-                  <li className="flex items-start gap-3"><BanknoteArrowDown className="mt-0.5 size-4 text-[var(--brand-primary)]" /> Secure collection and payout workflows for dependable marketplace settlement.</li>
-                  <li className="flex items-start gap-3"><ShieldCheck className="mt-0.5 size-4 text-[var(--brand-primary)]" /> Software engineering, graphic design, UI/UX, content, SEO, and social media management in one workspace.</li>
-                  <li className="flex items-start gap-3"><Sparkles className="mt-0.5 size-4 text-[var(--brand-primary)]" /> Smart alerts and recommendations can grow with the platform over time.</li>
-                </ul>
+                <div className="mt-5 space-y-3">
+                  {[
+                    {
+                      title: 'Secure settlement',
+                      copy: 'Collection and payout stay inside one dependable commercial path.',
+                      Icon: BanknoteArrowDown,
+                    },
+                    {
+                      title: 'Digital business lanes',
+                      copy: 'Engineering, design, content, SEO, and growth work stay in one product surface.',
+                      Icon: ShieldCheck,
+                    },
+                    {
+                      title: 'Smart operating layer',
+                      copy: 'Alerts, notes, and AI guidance support the work without cluttering the workflow.',
+                      Icon: Sparkles,
+                    },
+                  ].map(({ title, copy, Icon }) => (
+                    <div key={title} className="rounded-[18px] border border-[var(--line)] bg-white p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-10 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--panel-muted)] text-[var(--brand-primary)]">
+                          <Icon className="size-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-[var(--text-primary)]">{title}</p>
+                          <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">{copy}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         </Card>
 
         <Card id="service-categories">
-          <p className="text-xs uppercase tracking-[0.22em] text-[var(--brand-secondary)]">WOLFIX service catalog</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-[var(--brand-secondary)]">WOLFIX request lanes</p>
           <div className="mt-6 space-y-5">
-            {[
-              'Custom software and product engineering',
-              'Graphic design, brand systems, UI/UX, and motion assets',
-              'Social media management, content operations, and digital campaigns',
-              'Automation, analytics, SEO, and remote digital retainers',
-            ].map((item) => (
-              <div key={item} className="rounded-[20px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(18,40,92,0.84),rgba(14,31,74,0.66))] px-4 py-4 text-sm text-[var(--text-secondary)]">
-                {item}
+            {requestLaneCards.map(({ label, copy, icon: Icon, tone }) => (
+              <div key={label} className="rounded-[20px] border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-4 text-sm text-[var(--text-secondary)] shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+                <div className="flex items-start gap-3">
+                  <div className={`flex size-10 items-center justify-center rounded-2xl ${tone}`}>
+                    <Icon className="size-4" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-[var(--text-primary)]">{label}</p>
+                    <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">{copy}</p>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -134,7 +273,7 @@ export default function HomePage() {
 
       <section
         id="consultation"
-        className="mt-8 grid gap-6 overflow-hidden rounded-[32px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(8,20,48,0.92),rgba(13,30,74,0.84))] px-6 py-6 shadow-[var(--shadow-panel)] backdrop-blur-2xl lg:grid-cols-[1.1fr_0.9fr] lg:px-8"
+        className="mt-8 grid gap-6 overflow-hidden rounded-[32px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))] px-6 py-6 shadow-[var(--shadow-panel)] backdrop-blur-2xl lg:grid-cols-[1.1fr_0.9fr] lg:px-8"
       >
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-[var(--brand-secondary)]">Consultation Desk</p>
@@ -157,19 +296,33 @@ export default function HomePage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {[
-            ['Call / WhatsApp', '+255 622 670 772', 'Immediate consultation line for new projects and delivery discussions.'],
-            ['Alternate Contact', '+255 683 186 987', 'Secondary business line for marketplace and project coordination.'],
-            ['Email', 'wolfixagency84@gmail.com', 'Use email for project scope, briefs, commercial discussions, and follow-up.'],
-            ['Location', 'Mlimani City, Dar es Salaam', 'Local business presence for meetings, discovery, and partnership conversations.'],
-          ].map(([title, value, copy]) => (
-            <div key={title} className="rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(18,40,92,0.84),rgba(14,31,74,0.66))] p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--brand-secondary)]">{title}</p>
+          {consultationCards.map(({ title, value, copy, icon: Icon, tone }) => (
+            <div key={title} className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-strong)] p-5 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+              <div className="flex items-center gap-3">
+                <div className={`flex size-10 items-center justify-center rounded-2xl ${tone}`}>
+                  <Icon className="size-4" />
+                </div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--brand-secondary)]">{title}</p>
+              </div>
               <p className="mt-3 font-display text-2xl text-[var(--text-primary)]">{value}</p>
               <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">{copy}</p>
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="mt-8 grid gap-4 rounded-[28px] border border-[var(--line)] bg-[rgba(255,255,255,0.92)] px-5 py-5 shadow-[var(--shadow-soft)] md:grid-cols-4">
+        {closingSignalCards.map(({ title, value, icon: Icon, tone }) => (
+          <div key={title} className="rounded-[20px] border border-[var(--line)] bg-[var(--panel-strong)] px-4 py-4">
+            <div className="flex items-center gap-2">
+              <div className={`flex size-8 items-center justify-center rounded-2xl ${tone}`}>
+                <Icon className="size-4" />
+              </div>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">{title}</p>
+            </div>
+            <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">{value}</p>
+          </div>
+        ))}
       </section>
     </main>
   );

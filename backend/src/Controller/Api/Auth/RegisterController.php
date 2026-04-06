@@ -28,17 +28,36 @@ final class RegisterController extends AbstractController
         }
 
         $role = match ($type) {
+            'client' => 'ROLE_USER',
             'vendor' => 'ROLE_VENDOR',
-            default => 'ROLE_USER',
+            default => null,
         };
 
+        if ($role === null) {
+            return $this->json(['error' => 'Invalid account type'], 400);
+        }
+
         try {
-            return $this->json(
-                $auth->register($email, $password, $role),
-                201
-            );
+            $result = $auth->register($email, $password, $role);
+            return $this->json($result, 201);
         } catch (\DomainException $e) {
-            return $this->json(['error' => $e->getMessage()], 409);
+            $statusCode = $e->getMessage() === 'Email already exists' ? 409 : 400;
+
+            return $this->json(['error' => $e->getMessage()], $statusCode);
+        } catch (\Throwable $e) {
+            $payload = [
+                'error' => 'server_error',
+                'message' => 'Internal server error',
+            ];
+
+            if (filter_var($_SERVER['APP_DEBUG'] ?? getenv('APP_DEBUG') ?: false, FILTER_VALIDATE_BOOL)) {
+                $payload['debug'] = [
+                    'exception' => $e::class,
+                    'detail' => $e->getMessage(),
+                ];
+            }
+
+            return $this->json($payload, 500);
         }
     }
 }

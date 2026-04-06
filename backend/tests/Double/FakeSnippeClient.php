@@ -9,6 +9,7 @@ use App\Service\SnippeClient;
 final class FakeSnippeClient extends SnippeClient
 {
     public static array $calls = [];
+    public static bool $failPayout = false;
 
     public function createCollection(
         string $reference,
@@ -23,7 +24,14 @@ final class FakeSnippeClient extends SnippeClient
         ?string $customerLastName = null,
         array $metadata = []
     ): array {
-        self::$calls[] = ['operation' => 'collection', 'reference' => $reference];
+        self::$calls[] = [
+            'operation' => 'collection',
+            'reference' => $reference,
+            'callback_url' => $callbackUrl,
+            'msisdn' => $msisdn,
+            'provider' => strtoupper($provider),
+            'idempotency_key' => $idempotencyKey,
+        ];
 
         return [
             'status' => 'success',
@@ -52,7 +60,17 @@ final class FakeSnippeClient extends SnippeClient
         ?string $recipientName = null,
         array $metadata = []
     ): array {
-        self::$calls[] = ['operation' => 'payout', 'reference' => $reference];
+        if (self::$failPayout) {
+            throw new \RuntimeException('Simulated payout provider failure');
+        }
+
+        self::$calls[] = [
+            'operation' => 'payout',
+            'reference' => $reference,
+            'callback_url' => $callbackUrl,
+            'provider' => strtoupper($provider),
+            'idempotency_key' => $idempotencyKey,
+        ];
 
         return [
             'status' => 'success',

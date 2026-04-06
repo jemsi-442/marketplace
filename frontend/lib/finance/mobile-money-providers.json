@@ -1,0 +1,34 @@
+[
+  {
+    "code": "MPESA",
+    "label": "M-Pesa",
+    "subtitle": "Vodacom",
+    "logoPath": "/payments/mpesa.svg",
+    "logoShellClassName": "bg-white p-1.5",
+    "aliases": ["MPESA", "M-PESA"]
+  },
+  {
+    "code": "AIRTELMONEY",
+    "label": "Airtel Money",
+    "subtitle": "Airtel",
+    "logoPath": "/payments/airtel-money.svg",
+    "logoShellClassName": "bg-white p-1.5",
+    "aliases": ["AIRTELMONEY", "AIRTEL"]
+  },
+  {
+    "code": "MIXXYAS",
+    "label": "Mixx by Yas",
+    "subtitle": "Yas",
+    "logoPath": "/payments/mix-by-yas.svg",
+    "logoShellClassName": "bg-white p-1.5",
+    "aliases": ["MIXXYAS", "MIXXBYYAS", "MIXBYYAS", "YAS"]
+  },
+  {
+    "code": "HALOPESA",
+    "label": "HaloPesa",
+    "subtitle": "Halotel",
+    "logoPath": "/payments/halopesa.svg",
+    "logoShellClassName": "bg-white p-1.5",
+    "aliases": ["HALOPESA", "HALOTEL"]
+  }
+]

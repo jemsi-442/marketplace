@@ -6,7 +6,7 @@ DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-3306}"
 DB_NAME="${DB_NAME:-marketplace}"
 DB_USER="${DB_USER:-marketplace_user}"
-DB_PASS="${DB_PASS:-Jay442tx}"
+DB_PASS="${DB_PASS:-}"
 
 MYSQL=(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" -D "$DB_NAME" -N -B)
 
@@ -20,6 +20,11 @@ require_bin() {
 require_bin curl
 require_bin jq
 require_bin mysql
+
+if [[ -z "$DB_PASS" ]]; then
+  echo "Set DB_PASS before running this smoke script." >&2
+  exit 1
+fi
 
 http_json() {
   local method="$1"

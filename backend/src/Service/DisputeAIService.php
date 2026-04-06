@@ -10,7 +10,8 @@ use App\DTO\DisputeAIResult;
 class DisputeAIService
 {
     /**
-     * Main AI entry point
+     * Internal advisory entry point.
+     * The returned result should support admin review, not replace it.
      */
     public function analyze(Dispute $dispute): DisputeAIResult
     {
@@ -36,11 +37,11 @@ class DisputeAIService
     {
         $booking = $dispute->getBooking();
         $client = $booking->getClient();
-        $vendor = $booking->getService()->getVendor()->getUser();
+        $vendor = $booking->resolveVendorUser();
         $reason = mb_strtolower(trim($dispute->getReason()));
 
         return [
-            'vendor_trust'        => $this->normalizePercent($vendor->getTrustScore()),
+            'vendor_trust'        => $this->normalizePercent($vendor?->getTrustScore()),
             'client_trust'        => $this->normalizePercent($client->getTrustScore()),
             'delivery_compliance' => $this->deliveryComplianceSignal($booking->getStatus()),
             'evidence_strength'   => $this->evidenceStrengthSignal($reason),
@@ -164,13 +165,13 @@ class DisputeAIService
 
         return match ($recommendation) {
             'release' =>
-                "AI recommends RELEASE due to strong vendor compliance and positive signals. Dominant factor: {$dominantSignal}.",
+                "Internal AI suggests RELEASE due to strong vendor compliance and positive signals. Dominant factor: {$dominantSignal}. Admin review is still required.",
 
             'refund' =>
-                "AI recommends REFUND due to weak delivery compliance or strong client-side signals. Dominant factor: {$dominantSignal}.",
+                "Internal AI suggests REFUND due to weak delivery compliance or strong client-side signals. Dominant factor: {$dominantSignal}. Admin review is still required.",
 
             default =>
-                "AI suggests MANUAL REVIEW because signals are balanced. Dominant factor: {$dominantSignal}.",
+                "Internal AI suggests MANUAL REVIEW because signals are balanced. Dominant factor: {$dominantSignal}. Admin review is still required.",
         };
     }
 

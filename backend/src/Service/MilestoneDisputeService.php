@@ -121,7 +121,9 @@ class MilestoneDisputeService
     }
 
     /**
-     * @return array{recommendation: string, confidence: float, reason: string, dispute_id: int|null}
+     * Internal advisory only.
+     *
+     * @return array{recommendation: string, confidence: float, reason: string, dispute_id: int|null, advisory_only: bool, decision_owner: string}
      */
     public function getAiRecommendation(MilestoneDispute $dispute): array
     {
@@ -130,6 +132,8 @@ class MilestoneDisputeService
             'confidence' => 0.5,
             'reason' => 'No milestone-specific AI model currently configured.',
             'dispute_id' => $dispute->getId(),
+            'advisory_only' => true,
+            'decision_owner' => 'admin',
         ];
     }
 

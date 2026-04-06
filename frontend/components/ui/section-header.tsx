@@ -13,31 +13,31 @@ interface SectionHeaderProps {
 }
 
 const eyebrowToneStyles: Record<NonNullable<SectionHeaderProps['variant']>, string> = {
-  default: 'text-[var(--brand-secondary)]',
-  finance: 'text-[#c9d5ff]',
-  communication: 'text-[#9fdfff]',
-  risk: 'text-[#ffb5cb]',
-  guidance: 'text-[#c4d1f5]',
-  activity: 'text-[#a7c4ff]',
-  market: 'text-[#d5e3ff]',
+  default: 'text-[var(--brand-primary)]',
+  finance: 'text-[var(--accent-teal)]',
+  communication: 'text-[var(--accent-violet)]',
+  risk: 'text-[#ffb5b5]',
+  guidance: 'text-[var(--accent-slate)]',
+  activity: 'text-[var(--accent-cyan)]',
+  market: 'text-[var(--accent-amber)]',
 };
 
 export function SectionHeader({ eyebrow, title, description, actions, className, sticky = false, variant = 'default' }: SectionHeaderProps) {
   return (
     <div
       className={cn(
-        'flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between',
+        'flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between',
         sticky &&
-          'sticky top-4 z-10 -mx-1 rounded-[24px] border border-[rgba(184,208,255,0.12)] bg-[linear-gradient(180deg,rgba(7,18,37,0.94),rgba(9,24,58,0.88))] px-4 py-4 shadow-[0_16px_32px_rgba(0,0,0,0.2)] backdrop-blur-xl',
+          'sticky top-4 z-10 -mx-1 rounded-[22px] border border-[var(--line)] bg-[rgba(255,255,255,0.9)] px-3 py-3 shadow-[0_16px_32px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:rounded-[24px] sm:px-4 sm:py-4',
         className,
       )}
     >
       <div>
         <p className={cn('text-xs uppercase tracking-[0.22em]', eyebrowToneStyles[variant])}>{eyebrow}</p>
-        <h2 className="mt-2 font-display text-2xl text-[var(--text-primary)]">{title}</h2>
-        {description ? <p className="mt-3 max-w-3xl text-sm text-[var(--text-secondary)]">{description}</p> : null}
+        <h2 className="mt-2 font-display text-[1.45rem] leading-tight tracking-[-0.03em] text-[var(--text-primary)] sm:text-[1.75rem]">{title}</h2>
+        {description ? <p className="mt-2 max-w-3xl text-[13px] leading-6 text-[var(--text-secondary)] sm:text-sm">{description}</p> : null}
       </div>
-      {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
+      {actions ? <div className="flex flex-wrap gap-2 sm:gap-3">{actions}</div> : null}
     </div>
   );
 }

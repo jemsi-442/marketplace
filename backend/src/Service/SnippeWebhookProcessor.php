@@ -102,7 +102,7 @@ final class SnippeWebhookProcessor
             } else {
                 $this->withdrawalService->handlePayoutWebhook($normalized);
             }
-        } catch (\RuntimeException $e) {
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
             return [
                 'status' => 202,
                 'body' => [
@@ -146,8 +146,7 @@ final class SnippeWebhookProcessor
 
         $externalTransactionIdRaw = $payload['transaction_id']
             ?? ($data['external_reference'] ?? null)
-            ?? ($data['externalReference'] ?? null)
-            ?? ($payload['id'] ?? null);
+            ?? ($data['externalReference'] ?? null);
         $externalTransactionId = is_scalar($externalTransactionIdRaw) ? (string) $externalTransactionIdRaw : '';
 
         $reasonRaw = $payload['reason'] ?? ($data['reason'] ?? null);

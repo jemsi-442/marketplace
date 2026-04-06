@@ -29,7 +29,10 @@ class ReviewTrustSubscriber implements EventSubscriber
             return;
         }
 
-        $vendor = $entity->getBooking()->getService()->getVendor()->getUser();
+        $vendor = $entity->getBooking()->resolveVendorUser();
+        if (!$vendor instanceof User) {
+            return;
+        }
 
         $this->trustCalculator->recalculateForVendor($vendor, 'REVIEW_CREATED', [
             'review_id' => $entity->getId(),

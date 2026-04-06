@@ -12,7 +12,7 @@ export function FormActionDock({ title, hint, className, children }: FormActionD
   return (
     <div
       className={cn(
-        'sticky bottom-4 z-10 rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(12,29,72,0.94),rgba(11,26,60,0.92))] p-4 shadow-[0_20px_48px_rgba(2,8,24,0.36)] backdrop-blur-2xl',
+        'sticky bottom-4 z-10 rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] p-4 shadow-[0_20px_48px_rgba(15,23,42,0.08)] backdrop-blur-2xl',
         className,
       )}
     >

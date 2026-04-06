@@ -17,6 +17,19 @@ interface TimelineStep {
   state: 'done' | 'current' | 'pending' | 'risk';
 }
 
+function formatMoney(amount?: number | null, currency = 'TZS'): string {
+  if (typeof amount !== 'number' || Number.isNaN(amount)) {
+    return '--';
+  }
+
+  return new Intl.NumberFormat('en-TZ', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount / 100);
+}
+
 function buildTimeline(booking: BookingRecord, perspective: 'client' | 'vendor'): TimelineStep[] {
   const steps: TimelineStep[] = [
     {
@@ -31,7 +44,7 @@ function buildTimeline(booking: BookingRecord, perspective: 'client' | 'vendor')
     steps.push({
       key: 'escrow-created',
       title: 'Escrow issued',
-      detail: `${booking.escrow.reference} for ${booking.escrow.amount_minor} ${booking.escrow.currency}.`,
+      detail: `${booking.escrow.reference} for ${formatMoney(booking.escrow.amount_minor, booking.escrow.currency)}.`,
       state: 'done',
     });
 
@@ -145,9 +158,28 @@ function StepIcon({ state }: Pick<TimelineStep, 'state'>) {
 
 export function BookingTimeline({ booking, perspective }: BookingTimelineProps) {
   const steps = buildTimeline(booking, perspective);
+  const summaryItems = [
+    {
+      label: 'Opened',
+      value: booking.created_at,
+      tone: 'border-[rgba(79,70,229,0.14)] bg-[rgba(79,70,229,0.06)] text-[var(--brand-primary)]',
+    },
+    {
+      label: 'Escrow',
+      value: booking.escrow ? booking.escrow.status : 'Missing',
+      tone: booking.escrow
+        ? 'border-[rgba(20,184,166,0.16)] bg-[rgba(20,184,166,0.08)] text-[rgb(15,118,110)]'
+        : 'border-[rgba(245,158,11,0.16)] bg-[rgba(245,158,11,0.08)] text-[rgb(146,64,14)]',
+    },
+    {
+      label: 'Next',
+      value: steps.find((step) => step.state === 'current' || step.state === 'risk' || step.state === 'pending')?.title ?? 'Closed',
+      tone: 'border-[rgba(56,189,248,0.16)] bg-[rgba(56,189,248,0.08)] text-[rgb(12,74,110)]',
+    },
+  ];
 
   return (
-    <div className="rounded-[22px] border border-[rgba(123,165,255,0.2)] bg-[linear-gradient(180deg,rgba(12,35,91,0.6),rgba(18,64,134,0.38))] p-4 backdrop-blur transition duration-300 hover:-translate-y-1 hover:shadow-[0_26px_60px_rgba(0,0,0,0.26)]">
+    <div className="rounded-[22px] border border-[rgba(56,189,248,0.16)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(240,249,255,0.96))] p-4 transition duration-300 hover:-translate-y-1 hover:shadow-[0_20px_44px_rgba(15,23,42,0.08)]">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <p className="font-display text-lg text-[var(--text-primary)]">{booking.service_title}</p>
@@ -157,9 +189,20 @@ export function BookingTimeline({ booking, perspective }: BookingTimelineProps) 
             {booking.escrow ? <StatusBadge label={booking.escrow.status} tone={getEscrowStatusTone(booking.escrow.status)} /> : null}
           </div>
         </div>
-        <div className="flex size-10 items-center justify-center rounded-2xl bg-[var(--panel-muted)] text-[var(--brand-secondary)]">
+        <div className="flex size-10 items-center justify-center rounded-2xl border border-[var(--line)] bg-[var(--panel-muted)] text-[var(--brand-secondary)]">
           <WalletCards className="size-4" />
         </div>
+      </div>
+
+      <div className="mb-4 grid gap-3 md:grid-cols-3">
+        {summaryItems.map((item) => (
+          <div key={item.label} className="rounded-[18px] border border-[var(--line)] bg-white px-3 py-3">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">{item.label}</p>
+            <div className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.14em] ${item.tone}`}>
+              {item.value}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="space-y-4">
@@ -169,20 +212,20 @@ export function BookingTimeline({ booking, perspective }: BookingTimelineProps) 
               <div
                 className={cn(
                   'flex size-9 items-center justify-center rounded-full border',
-                  step.state === 'done' && 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300',
-                  step.state === 'current' && 'border-[rgba(206,226,250,0.34)] bg-[rgba(255,255,255,0.14)] text-white',
-                  step.state === 'pending' && 'border-[var(--line)] bg-[var(--panel-muted)] text-[var(--text-tertiary)]',
-                  step.state === 'risk' && 'border-rose-400/50 bg-rose-400/10 text-rose-300',
+                  step.state === 'done' && 'border-[rgba(34,197,94,0.18)] bg-[rgba(240,253,244,0.94)] text-emerald-700',
+                  step.state === 'current' && 'border-[rgba(79,70,229,0.18)] bg-[rgba(238,242,255,0.94)] text-[var(--brand-primary)]',
+                  step.state === 'pending' && 'border-[var(--line)] bg-white text-[var(--text-tertiary)]',
+                  step.state === 'risk' && 'border-[rgba(249,115,22,0.18)] bg-[rgba(255,247,237,0.94)] text-orange-700',
                 )}
               >
                 <StepIcon state={step.state} />
               </div>
               {index < steps.length - 1 ? (
-                <div className="mt-2 h-8 w-px bg-[var(--line)]" />
+                <div className="mt-2 h-8 w-px bg-[rgba(148,163,184,0.24)]" />
               ) : null}
             </div>
             <div className="pb-2">
-              <p className="text-sm text-[var(--text-primary)]">{step.title}</p>
+              <p className="text-sm font-medium text-[var(--text-primary)]">{step.title}</p>
               <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">{step.detail}</p>
             </div>
           </div>

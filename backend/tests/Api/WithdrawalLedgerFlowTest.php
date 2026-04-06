@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Api;
 
 use App\Entity\WithdrawalRequest;
+use App\Tests\Double\FakeSnippeClient;
 use App\Service\VendorWalletService;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -142,6 +143,119 @@ final class WithdrawalLedgerFlowTest extends ApiTestCase
                 ]
             )
         );
+    }
+
+    public function testApprovalReturnsBusinessErrorAndRecreditsBalanceWhenPayoutInitiationFails(): void
+    {
+        FakeSnippeClient::$calls = [];
+        FakeSnippeClient::$failPayout = true;
+
+        try {
+            $suffix = $this->uniqueSuffix();
+            $password = 'Password123!';
+
+            $vendorRegistration = $this->registerUser("vendor_withdraw_fail_{$suffix}@test.com", $password, 'vendor');
+            $adminRegistration = $this->registerUser("admin_withdraw_fail_{$suffix}@test.com", $password, 'client');
+
+            $this->verifyUser($vendorRegistration['verification_url']);
+            $this->verifyUser($adminRegistration['verification_url']);
+
+            $this->promoteUserToAdmin($adminRegistration['user']['email']);
+            $this->seedVendorProfile((int) $vendorRegistration['user']['id'], 'Withdrawal Failure Vendor');
+
+            $vendorLogin = $this->loginUser($vendorRegistration['user']['email'], $password);
+            $adminLogin = $this->loginUser($adminRegistration['user']['email'], $password);
+
+            /** @var VendorWalletService $walletService */
+            $walletService = static::getContainer()->get(VendorWalletService::class);
+            $vendorUser = $this->reloadUserByEmail($vendorRegistration['user']['email']);
+            $walletService->manualCreditVendor(
+                $vendorUser,
+                100000,
+                'TZS',
+                'test_wallet_failure_funding_' . $suffix,
+                'test_wallet_failure_funding_' . $suffix,
+                ['movement' => 'TEST_FUNDING']
+            );
+
+            $withdrawalCreate = $this->requestJson('POST', '/api/withdrawals', [
+                'amount_minor' => 50000,
+                'currency' => 'TZS',
+                'msisdn' => '255700000111',
+                'provider' => 'MPESA',
+            ], $vendorLogin['token']);
+            self::assertResponseStatusCodeSame(Response::HTTP_CREATED);
+
+            $withdrawalId = (int) $withdrawalCreate['id'];
+
+            $approveResponse = $this->requestJson('POST', "/api/withdrawals/{$withdrawalId}/approve", [
+                'callback_url' => '/api/payments/webhooks/payout',
+            ], $adminLogin['token']);
+
+            self::assertResponseStatusCodeSame(Response::HTTP_UNPROCESSABLE_ENTITY);
+            self::assertSame(
+                'Withdrawal payout initiation failed. The request has been marked as failed and the balance was returned.',
+                $approveResponse['error'] ?? null
+            );
+
+            /** @var array<string,mixed>|false $failedWithdrawal */
+            $failedWithdrawal = $this->db->fetchAssociative(
+                'SELECT status, failure_reason FROM withdrawal_request WHERE id = :id LIMIT 1',
+                ['id' => $withdrawalId]
+            );
+
+            self::assertIsArray($failedWithdrawal);
+            self::assertSame(WithdrawalRequest::STATUS_FAILED, $failedWithdrawal['status']);
+            self::assertStringContainsString('Payout initiation failed:', (string) $failedWithdrawal['failure_reason']);
+            self::assertSame(100000, $walletService->getVendorBalance($vendorUser, 'TZS'));
+        } finally {
+            FakeSnippeClient::$failPayout = false;
+        }
+    }
+
+    public function testMalformedSuccessfulPayoutWebhookIsRecordedButDoesNotMarkWithdrawalPaidWithoutTransactionId(): void
+    {
+        $ctx = $this->bootstrapApprovedWithdrawal();
+        $withdrawalId = $ctx['withdrawalId'];
+        $withdrawalReference = $ctx['withdrawalReference'];
+        $suffix = $ctx['suffix'];
+
+        $timestamp = (string) time();
+        $payoutBody = $this->jsonEncode([
+            'id' => 'evt_withdraw_missing_txn_' . $suffix,
+            'type' => 'payout.completed',
+            'created_at' => gmdate('Y-m-d\TH:i:s\Z'),
+            'data' => [
+                'reference' => 'payout_' . $withdrawalReference,
+                'status' => 'success',
+                'metadata' => [
+                    'order_id' => $withdrawalReference,
+                ],
+            ],
+        ]);
+
+        $signature = hash_hmac('sha256', $payoutBody, $this->webhookSecret());
+
+        $webhookResponse = $this->requestRawWebhook(
+            '/api/payments/webhooks/payout',
+            $payoutBody,
+            $signature,
+            $timestamp,
+            'payout.completed'
+        );
+        self::assertResponseStatusCodeSame(Response::HTTP_ACCEPTED);
+        self::assertSame('Webhook recorded but not applied', $webhookResponse['message'] ?? null);
+        self::assertSame('Payout success webhook missing transaction id.', $webhookResponse['reason'] ?? null);
+
+        /** @var array<string,mixed>|false $withdrawal */
+        $withdrawal = $this->db->fetchAssociative(
+            'SELECT status, external_transaction_id FROM withdrawal_request WHERE id = :id LIMIT 1',
+            ['id' => $withdrawalId]
+        );
+
+        self::assertIsArray($withdrawal);
+        self::assertSame(WithdrawalRequest::STATUS_PROCESSING, $withdrawal['status']);
+        self::assertNull($withdrawal['external_transaction_id']);
     }
 
     /**
