@@ -23,6 +23,7 @@ final class VendorCapabilityApprovalFlowTest extends ApiTestCase
 
         $this->promoteUserToAdmin($adminRegistration['user']['email']);
         $this->seedVendorProfile((int) $vendorRegistration['user']['id'], 'Capability Fixture Vendor');
+        $this->markVendorVerified((int) $vendorRegistration['user']['id']);
 
         $clientLogin = $this->loginUser($clientRegistration['user']['email'], $password);
         $vendorLogin = $this->loginUser($vendorRegistration['user']['email'], $password);
@@ -112,6 +113,7 @@ final class VendorCapabilityApprovalFlowTest extends ApiTestCase
 
         $this->promoteUserToAdmin($adminRegistration['user']['email']);
         $this->seedVendorProfile((int) $vendorRegistration['user']['id'], 'Editable Capability Vendor');
+        $this->markVendorVerified((int) $vendorRegistration['user']['id']);
 
         $clientLogin = $this->loginUser($clientRegistration['user']['email'], $password);
         $vendorLogin = $this->loginUser($vendorRegistration['user']['email'], $password);
@@ -200,6 +202,7 @@ final class VendorCapabilityApprovalFlowTest extends ApiTestCase
 
         $this->promoteUserToAdmin($adminRegistration['user']['email']);
         $this->seedVendorProfile((int) $vendorRegistration['user']['id'], 'Disable Capability Vendor');
+        $this->markVendorVerified((int) $vendorRegistration['user']['id']);
 
         $clientLogin = $this->loginUser($clientRegistration['user']['email'], $password);
         $vendorLogin = $this->loginUser($vendorRegistration['user']['email'], $password);

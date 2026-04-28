@@ -24,8 +24,11 @@ final class ServiceCatalogFlowTest extends ApiTestCase
         $slugs = array_column($groups, 'slug');
         self::assertContains('software-development', $slugs);
         self::assertContains('design-creative', $slugs);
+        self::assertContains('business-finance-support', $slugs);
         self::assertContains('social-media-marketing', $slugs);
+        self::assertContains('content-media-communications', $slugs);
         self::assertContains('cybersecurity-infrastructure', $slugs);
+        self::assertContains('training-research-documentation', $slugs);
         self::assertContains('government-consultancy', $slugs);
         self::assertContains('automation-operations', $slugs);
 
@@ -33,6 +36,11 @@ final class ServiceCatalogFlowTest extends ApiTestCase
         self::assertNotNull($softwareGroup);
         self::assertGreaterThan(0, $softwareGroup['service_count'] ?? 0);
         self::assertContains('Payment Gateway Integration', $softwareGroup['featured_services'] ?? []);
+
+        $financeGroup = $this->findGroup($groups, 'business-finance-support');
+        self::assertNotNull($financeGroup);
+        self::assertGreaterThanOrEqual(10, $financeGroup['service_count'] ?? 0);
+        self::assertContains('Management Accounts Preparation', $financeGroup['featured_services'] ?? []);
 
         $socialServices = $this->requestJson(
             'GET',
@@ -67,6 +75,17 @@ final class ServiceCatalogFlowTest extends ApiTestCase
         self::assertCount(1, $governmentServices);
         self::assertSame('Tender Documentation Support', $governmentServices[0]['name'] ?? null);
         self::assertSame('government-consultancy', $governmentServices[0]['group_slug'] ?? null);
+
+        $trainingServices = $this->requestJson(
+            'GET',
+            '/api/service-types?group=training-research-documentation&search=proposal',
+            null,
+            $clientLogin['token']
+        );
+        self::assertResponseStatusCodeSame(Response::HTTP_OK);
+        self::assertNotEmpty($trainingServices);
+        self::assertContains('Proposal and Grant Writing Support', array_column($trainingServices, 'name'));
+        self::assertSame(['training-research-documentation'], array_values(array_unique(array_column($trainingServices, 'group_slug'))));
     }
 
     /**

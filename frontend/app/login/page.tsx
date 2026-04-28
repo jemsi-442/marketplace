@@ -14,6 +14,7 @@ import { Card } from '@/components/ui/card';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { FormHint } from '@/components/ui/form-hint';
 import { SocialAuthButtons } from '@/components/auth/social-auth-buttons';
+import { AuthTopbar } from '@/components/layout/auth-topbar';
 import { InstallCtaButton } from '@/components/pwa/install-cta-button';
 import { useAuthStore } from '@/lib/auth/store';
 import { apiClient } from '@/lib/api/client';
@@ -231,8 +232,8 @@ function LoginPageView() {
       return {
         tone: 'success' as const,
         title: 'Verification complete',
-        message: 'Email verified. Sign in now to reopen your workspace.',
-        actionHint: 'Use the same email and continue into the live lane.',
+        message: 'Email verified. Sign in now.',
+        actionHint: 'Use the same email to continue.',
       };
     }
 
@@ -240,8 +241,8 @@ function LoginPageView() {
       return {
         tone: 'warning' as const,
         title: 'Verification still needed',
-        message: 'Verify this email first, then sign in again. You can prepare a fresh verification link below.',
-        actionHint: 'Resend a fresh link if the first one is no longer available.',
+        message: 'Verify this email first, then sign in again.',
+        actionHint: 'Resend a new link below if needed.',
       };
     }
 
@@ -250,7 +251,7 @@ function LoginPageView() {
         tone: 'info' as const,
         title: 'Signed out cleanly',
         message: 'You have been signed out cleanly.',
-        actionHint: 'Sign in again whenever you want to continue.',
+        actionHint: 'Sign in again when ready.',
       };
     }
 
@@ -258,10 +259,8 @@ function LoginPageView() {
       return {
         tone: 'info' as const,
         title: nextRouteLabel ? `${nextRouteLabel} is waiting` : 'Session needed again',
-        message: nextPath
-          ? 'Sign in again to reopen the workspace lane you were using.'
-          : 'Sign in again to reopen your workspace.',
-        actionHint: nextRouteLabel ? `After sign-in, we will take you back to ${nextRouteLabel.toLowerCase()}.` : 'Once access is restored, your workspace will open again.',
+        message: nextPath ? 'Sign in again to reopen your last workspace.' : 'Sign in again to reopen your workspace.',
+        actionHint: nextRouteLabel ? `You will return to ${nextRouteLabel.toLowerCase()}.` : 'Your workspace will open again.',
       };
     }
 
@@ -269,8 +268,8 @@ function LoginPageView() {
       return {
         tone: 'success' as const,
         title: 'Account ready',
-        message: 'Account setup is complete. Sign in now and enter your workspace.',
-        actionHint: 'Use the same email you just created and continue into the correct lane.',
+        message: 'Account setup is complete. Sign in now.',
+        actionHint: 'Use the same email to continue.',
       };
     }
 
@@ -278,8 +277,8 @@ function LoginPageView() {
       return {
         tone: 'warning' as const,
         title: `${socialProviderLabel} is not ready yet`,
-        message: `This ${socialProviderLabel.toLowerCase()} option is not configured yet for this environment.`,
-        actionHint: 'Use email and password for now, or finish the provider credentials and callback URLs first.',
+        message: `${socialProviderLabel} is not configured in this environment yet.`,
+        actionHint: 'Use email for now.',
       };
     }
 
@@ -287,8 +286,8 @@ function LoginPageView() {
       return {
         tone: 'danger' as const,
         title: `${socialProviderLabel} sign-in did not complete`,
-        message: `We could not finish the ${socialProviderLabel.toLowerCase()} sign-in flow this time.`,
-        actionHint: 'Try the provider button again, or use email and password if this account already exists.',
+        message: `We could not finish the ${socialProviderLabel.toLowerCase()} sign-in flow.`,
+        actionHint: 'Try again or use email.',
       };
     }
 
@@ -418,30 +417,10 @@ function LoginPageView() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-10 lg:px-8">
-      <div className="flex w-full flex-1 items-center">
+    <main className="flex min-h-screen flex-col">
+      <AuthTopbar subtitle="Secure workspace access" primaryHref="/register" primaryLabel="Create account" />
+      <div className="mx-auto flex w-full max-w-7xl flex-1 items-center px-6 py-10 lg:px-8">
         <div className="w-full">
-          <div className="mb-6 flex items-center justify-between rounded-[28px] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] px-5 py-4 shadow-[var(--shadow-soft)] backdrop-blur-2xl">
-            <div className="flex items-center gap-4">
-              <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[rgba(255,255,255,0.94)] shadow-[0_12px_30px_rgba(7,24,84,0.18)]">
-                <Image src="/brand/wolfix-logo.svg" alt="WOLFIX DIGITAL AGENCY logo" width={50} height={50} className="h-[50px] w-[50px] object-cover" />
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.26em] text-[var(--brand-secondary)]">WOLFIX DIGITAL AGENCY</p>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">Secure access to the marketplace workspace</p>
-              </div>
-            </div>
-            <div className="hidden items-center gap-3 md:flex">
-              <InstallCtaButton variant="ghost" />
-              <Link href="/">
-                <Button variant="ghost">Home</Button>
-              </Link>
-              <Link href="/register">
-                <Button>Create account</Button>
-              </Link>
-            </div>
-          </div>
-
           <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
             <Card className="flex flex-col justify-between">
               <div>
@@ -456,12 +435,12 @@ function LoginPageView() {
                 </div>
                 <h1 className="font-display text-4xl leading-tight">Sign in to your WOLFIX workspace.</h1>
                 <p className="mt-5 max-w-xl text-base leading-8 text-[var(--text-secondary)]">
-                  Bookings, protected flow, messages, and delivery updates stay on one clean surface.
+                  Bookings, payments, messages, and delivery stay here.
                 </p>
                 <div className="mt-5 flex flex-wrap gap-3">
                   <InstallCtaButton variant="ghost" />
                   <span className="inline-flex items-center rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-                    Keep WOLFIX one tap away
+                    Keep WOLFIX close
                   </span>
                 </div>
               </div>
@@ -469,7 +448,7 @@ function LoginPageView() {
                 <div className="flex items-end justify-between gap-3">
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Workspace flow</p>
-                    <p className="mt-2 font-display text-2xl text-[var(--text-primary)]">Enter the live lane</p>
+                    <p className="mt-2 font-display text-2xl text-[var(--text-primary)]">Open workspace</p>
                   </div>
                   <div className="rounded-full border border-[rgba(79,70,229,0.14)] bg-[rgba(79,70,229,0.06)] px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-[var(--brand-primary)]">
                     Secure access
@@ -477,8 +456,8 @@ function LoginPageView() {
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
                   {[
-                    { title: 'Bookings', copy: 'Open live work.', icon: <BriefcaseBusiness className="size-4" />, tone: 'bg-[rgba(79,70,229,0.08)] text-[var(--brand-primary)]' },
-                    { title: 'Payments', copy: 'Keep value attached.', icon: <Wallet className="size-4" />, tone: 'bg-[rgba(13,148,136,0.1)] text-[var(--accent-teal)]' },
+                    { title: 'Bookings', copy: 'Open work.', icon: <BriefcaseBusiness className="size-4" />, tone: 'bg-[rgba(79,70,229,0.08)] text-[var(--brand-primary)]' },
+                    { title: 'Payments', copy: 'Keep value linked.', icon: <Wallet className="size-4" />, tone: 'bg-[rgba(13,148,136,0.1)] text-[var(--accent-teal)]' },
                     { title: 'Updates', copy: 'Read context fast.', icon: <MessageSquareMore className="size-4" />, tone: 'bg-[rgba(14,165,233,0.1)] text-[var(--accent-cyan)]' },
                   ].map((item) => (
                     <div key={item.title} className="rounded-[18px] border border-[var(--line)] bg-white p-4">

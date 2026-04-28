@@ -1,8 +1,12 @@
 import { appConfig } from '@/lib/config';
 import type {
   AdminMetricsHealth,
+  AdminOpsOverview,
   AdminMetricsTrendResponse,
   AdminVendorCapabilityListResponse,
+  AdminVendorVerificationRecord,
+  AdminVendorVerificationListResponse,
+  AdminVendorVerificationReviewResponse,
   AdminVendorCapabilitySummary,
   AdminVendorCapabilityReviewInput,
   AdminVendorCapabilityReviewResponse,
@@ -36,7 +40,9 @@ import type {
   BookingSummary,
   CollectionGatewayResponse,
   DeliveryActionResponse,
+  DeliveryDirectUploadPrepareResponse,
   DeliveryRecord,
+  VendorResumeDirectUploadPrepareResponse,
   DashboardShellSummary,
   EscrowActionResponse,
   AuthResponse,
@@ -54,16 +60,21 @@ import type {
   ReviewRecord,
   ServiceGroupRecord,
   ServiceTypeRecord,
+  SignedDownloadLinkResponse,
   WithdrawalActionResponse,
   WithdrawalListResponse,
   WithdrawalRequestInput,
   WithdrawalSummary,
   VendorDashboardSummary,
   VendorProfile,
+  VendorProfileResponse,
   VendorProfileInput,
   VendorServiceCapabilityInput,
   VendorServiceCapabilityRecord,
   VendorServiceCapabilityResponse,
+  VendorInterviewAnswerInput,
+  VendorInterviewGenerateResponse,
+  VendorInterviewSubmitResponse,
   VendorTrustSummary,
   VerificationResponse,
 } from '@/lib/types';
@@ -198,6 +209,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     credentials: 'include',
   });
 
+  const requestId = response.headers.get('x-request-id');
   const data = await response.json().catch(() => null);
 
   if (response.status === 401 && !options.skipAuthRefresh) {
@@ -219,7 +231,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           ? data.error
         : `Request failed with status ${response.status}`;
 
-    throw new Error(message);
+    const resolvedRequestId =
+      data && typeof data === 'object' && 'request_id' in data && typeof data.request_id === 'string'
+        ? data.request_id
+        : requestId;
+
+    throw new Error(resolvedRequestId ? `${message} (Request ID: ${resolvedRequestId})` : message);
   }
 
   return data as T;
@@ -373,6 +390,54 @@ export const apiClient = {
       body: JSON.stringify({ reason }),
     });
   },
+  submitBookingDelivery(
+    token: string,
+    bookingId: number,
+    input: {
+      delivery_note: string;
+      delivery_link?: string | null;
+      stored_attachments?: Array<{
+        file_name: string;
+        storage_path: string;
+        mime_type: string;
+        upload_token: string;
+        expires: number;
+      }>;
+    },
+    files: File[] = [],
+  ): Promise<DeliveryActionResponse> {
+    if (files.length === 0) {
+      return request<DeliveryActionResponse>(`/api/bookings/${bookingId}/deliveries`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify(input),
+      });
+    }
+
+    const formData = new FormData();
+    formData.append('delivery_note', input.delivery_note);
+    if (input.delivery_link && input.delivery_link.trim() !== '') {
+      formData.append('delivery_link', input.delivery_link.trim());
+    }
+    files.forEach((file) => formData.append('files[]', file));
+
+    return request<DeliveryActionResponse>(`/api/bookings/${bookingId}/deliveries`, {
+      method: 'POST',
+      token,
+      body: formData,
+    });
+  },
+  prepareBookingDeliveryDirectUpload(
+    token: string,
+    bookingId: number,
+    input: { files: Array<{ file_name: string; mime_type: string }> },
+  ): Promise<DeliveryDirectUploadPrepareResponse> {
+    return request<DeliveryDirectUploadPrepareResponse>(`/api/bookings/${bookingId}/deliveries/direct-upload/prepare`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify(input),
+    });
+  },
   deleteBookingDelivery(token: string, bookingId: number, deliveryId: number): Promise<DeliveryActionResponse> {
     return request<DeliveryActionResponse>(`/api/bookings/${bookingId}/deliveries/${deliveryId}`, {
       method: 'DELETE',
@@ -472,6 +537,52 @@ export const apiClient = {
       body: JSON.stringify(input),
     });
   },
+  uploadVendorResume(token: string, file: File): Promise<VendorProfileResponse> {
+    const formData = new FormData();
+    formData.append('resume', file);
+
+    return request<VendorProfileResponse>('/api/vendor/profile/resume', {
+      method: 'POST',
+      token,
+      body: formData,
+    });
+  },
+  prepareVendorResumeDirectUpload(
+    token: string,
+    input: { file_name: string; mime_type: string },
+  ): Promise<VendorResumeDirectUploadPrepareResponse> {
+    return request<VendorResumeDirectUploadPrepareResponse>('/api/vendor/profile/resume/direct-upload/prepare', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(input),
+    });
+  },
+  finalizeVendorResumeDirectUpload(
+    token: string,
+    input: { file_name: string; mime_type: string; storage_path: string; upload_token: string; expires: number },
+  ): Promise<VendorProfileResponse> {
+    return request<VendorProfileResponse>('/api/vendor/profile/resume/direct-upload/finalize', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(input),
+    });
+  },
+  generateVendorInterview(token: string): Promise<VendorInterviewGenerateResponse> {
+    return request<VendorInterviewGenerateResponse>('/api/vendor/profile/interview/generate', {
+      method: 'POST',
+      token,
+    });
+  },
+  submitVendorInterview(token: string, answers: VendorInterviewAnswerInput[]): Promise<VendorInterviewSubmitResponse> {
+    return request<VendorInterviewSubmitResponse>('/api/vendor/profile/interview/submit', {
+      method: 'POST',
+      token,
+      body: JSON.stringify({ answers }),
+    });
+  },
+  getVendorResumeDownloadLink(token: string): Promise<SignedDownloadLinkResponse> {
+    return request<SignedDownloadLinkResponse>('/api/vendor/profile/resume/link', { token });
+  },
   getAdminMetricsHealth(token: string): Promise<AdminMetricsHealth> {
     return request<AdminMetricsHealth>('/api/admin/metrics/health', {
       token,
@@ -480,6 +591,9 @@ export const apiClient = {
   },
   getAdminMetricsTrend(token: string, days = 30): Promise<AdminMetricsTrendResponse> {
     return request<AdminMetricsTrendResponse>(`/api/admin/metrics/trend?days=${days}`, { token });
+  },
+  getAdminOpsOverview(token: string): Promise<AdminOpsOverview> {
+    return request<AdminOpsOverview>('/api/admin/metrics/ops-overview', { token });
   },
   getDisputedEscrows(token: string, options: AdminEscrowListOptions = {}): Promise<AdminEscrowListResponse> {
     const params = new URLSearchParams();
@@ -578,6 +692,49 @@ export const apiClient = {
     return request<AdminUserActionResponse>(`/api/admin/users/${userId}`, {
       method: 'DELETE',
       token,
+    });
+  },
+  getAdminVendorVerifications(
+    token: string,
+    options: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      view?: 'all' | 'ready_review' | 'badge_active' | 'needs_revision' | 'missing_resume';
+    } = {},
+  ): Promise<AdminVendorVerificationListResponse> {
+    const params = new URLSearchParams();
+    if (typeof options.page === 'number') {
+      params.set('page', String(options.page));
+    }
+    if (typeof options.limit === 'number') {
+      params.set('limit', String(options.limit));
+    }
+    if (options.search) {
+      params.set('search', options.search);
+    }
+    if (options.view) {
+      params.set('view', options.view);
+    }
+
+    const suffix = params.size ? `?${params.toString()}` : '';
+    return request<AdminVendorVerificationListResponse>(`/api/admin/vendor-verifications${suffix}`, { token });
+  },
+  getAdminVendorVerification(token: string, profileId: number): Promise<AdminVendorVerificationRecord> {
+    return request<AdminVendorVerificationRecord>(`/api/admin/vendor-verifications/${profileId}`, { token });
+  },
+  getAdminVendorVerificationResumeLink(token: string, profileId: number): Promise<SignedDownloadLinkResponse> {
+    return request<SignedDownloadLinkResponse>(`/api/admin/vendor-verifications/${profileId}/resume-link`, { token });
+  },
+  reviewAdminVendorVerification(
+    token: string,
+    profileId: number,
+    input: { decision: 'approve' | 'revoke'; review_note?: string | null },
+  ): Promise<AdminVendorVerificationReviewResponse> {
+    return request<AdminVendorVerificationReviewResponse>(`/api/admin/vendor-verifications/${profileId}/review`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify(input),
     });
   },
   getAdminClientRequests(token: string, options: AdminClientRequestListOptions = {}): Promise<AdminClientRequestListResponse> {

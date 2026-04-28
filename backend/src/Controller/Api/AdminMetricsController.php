@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
+use App\Service\OperationsDiagnosticsService;
 use App\Service\PlatformMetricsHealthService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -15,8 +16,10 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ADMIN')]
 class AdminMetricsController extends AbstractController
 {
-    public function __construct(private readonly PlatformMetricsHealthService $metricsHealthService)
-    {
+    public function __construct(
+        private readonly PlatformMetricsHealthService $metricsHealthService,
+        private readonly OperationsDiagnosticsService $operationsDiagnosticsService,
+    ) {
     }
 
     #[Route('/health', name: 'admin_metrics_health', methods: ['GET'])]
@@ -34,5 +37,11 @@ class AdminMetricsController extends AbstractController
         $days = (int) $request->query->get('days', 30);
 
         return $this->json($this->metricsHealthService->getTrend($days));
+    }
+
+    #[Route('/ops-overview', name: 'admin_metrics_ops_overview', methods: ['GET'])]
+    public function opsOverview(): JsonResponse
+    {
+        return $this->json($this->operationsDiagnosticsService->getOverview());
     }
 }

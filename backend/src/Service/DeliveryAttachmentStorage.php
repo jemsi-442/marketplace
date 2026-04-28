@@ -23,7 +23,7 @@ final class DeliveryAttachmentStorage
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => ['xlsx'],
         'application/vnd.ms-powerpoint' => ['ppt'],
         'application/vnd.openxmlformats-officedocument.presentationml.presentation' => ['pptx'],
-        'image/jpeg' => ['jpg'],
+        'image/jpeg' => ['jpg', 'jpeg'],
         'image/png' => ['png'],
         'image/webp' => ['webp'],
         'text/plain' => ['txt'],
@@ -31,30 +31,12 @@ final class DeliveryAttachmentStorage
         'application/json' => ['json'],
     ];
 
-    /**
-     * @var array<string, string>
-     */
-    private const EXTENSION_TO_MIME_TYPE = [
-        'pdf' => 'application/pdf',
-        'zip' => 'application/zip',
-        'doc' => 'application/msword',
-        'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'xls' => 'application/vnd.ms-excel',
-        'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'ppt' => 'application/vnd.ms-powerpoint',
-        'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'jpg' => 'image/jpeg',
-        'jpeg' => 'image/jpeg',
-        'png' => 'image/png',
-        'webp' => 'image/webp',
-        'txt' => 'text/plain',
-        'csv' => 'text/csv',
-        'json' => 'application/json',
-    ];
-
     public function __construct(
         private readonly string $uploadDir,
         private readonly string $legacyPublicUploadDir,
+        private readonly ObjectStorageInterface $objectStorage,
+        private readonly UploadedFileSecurityInspector $uploadedFileSecurityInspector,
+        private readonly UploadMalwareScanner $uploadMalwareScanner,
     ) {
     }
 
@@ -72,24 +54,23 @@ final class DeliveryAttachmentStorage
             throw new \InvalidArgumentException('Each delivery file must be between 1 byte and 15 MB.');
         }
 
-        $mimeType = $this->detectMimeType($file);
+        $mimeType = $this->uploadedFileSecurityInspector->detectAllowedMimeType($file, self::ALLOWED_MIME_TYPES);
         if ($mimeType === null || !array_key_exists($mimeType, self::ALLOWED_MIME_TYPES)) {
             throw new \InvalidArgumentException(sprintf('Unsupported delivery file type: %s', $mimeType ?? 'unknown'));
         }
 
-        $targetDir = rtrim($this->uploadDir, '/') . '/booking-' . $bookingId;
-        if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
-            throw new \RuntimeException('Could not prepare delivery upload directory.');
-        }
+        $this->uploadMalwareScanner->assertSafe($file, 'Delivery file');
 
         $originalName = $file->getClientOriginalName() ?: 'delivery-file';
         $safeName = $this->sanitizeFileName(pathinfo($originalName, PATHINFO_FILENAME));
         $extension = self::ALLOWED_MIME_TYPES[$mimeType][0] ?? 'bin';
         $storedName = sprintf('%s-%s.%s', $safeName, bin2hex(random_bytes(6)), $extension);
-
-        $file->move($targetDir, $storedName);
-
-        $storagePath = 'booking-' . $bookingId . '/' . $storedName;
+        $storagePath = $this->objectStorage->storeUploadedFile(
+            $file,
+            $this->uploadDir,
+            'booking-' . $bookingId,
+            $storedName
+        );
 
         return [
             'file_name' => $originalName,
@@ -99,83 +80,106 @@ final class DeliveryAttachmentStorage
         ];
     }
 
-    private function detectMimeType(UploadedFile $file): ?string
+    public function assertSupportedMimeType(string $mimeType): void
     {
-        $pathname = $file->getPathname();
-        if (!is_string($pathname) || $pathname === '' || !is_file($pathname)) {
-            return null;
+        $normalizedMime = trim($mimeType);
+        if ($normalizedMime === '' || !array_key_exists($normalizedMime, self::ALLOWED_MIME_TYPES)) {
+            throw new \InvalidArgumentException(sprintf('Unsupported delivery file type: %s', $normalizedMime !== '' ? $normalizedMime : 'unknown'));
         }
-
-        if (function_exists('finfo_open') && function_exists('finfo_file')) {
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            if ($finfo !== false) {
-                $detected = finfo_file($finfo, $pathname);
-                finfo_close($finfo);
-
-                if (is_string($detected) && $detected !== '') {
-                    if ($detected !== 'application/octet-stream') {
-                        return $detected;
-                    }
-                }
-            }
-        }
-
-        $extension = strtolower((string) pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION));
-        if ($extension !== '' && isset(self::EXTENSION_TO_MIME_TYPE[$extension])) {
-            return self::EXTENSION_TO_MIME_TYPE[$extension];
-        }
-
-        return null;
     }
 
     public function resolveStoredAttachmentPath(?string $storagePath): ?string
     {
-        if ($storagePath === null || trim($storagePath) === '') {
+        return $this->objectStorage->resolveStoredPath($storagePath, [$this->uploadDir, $this->legacyPublicUploadDir]);
+    }
+
+    /**
+     * @return array{
+     *   file_name: string,
+     *   storage_path: string,
+     *   mime_type: string,
+     *   upload: array{
+     *     url: string,
+     *     method: string,
+     *     headers: array<string, string>,
+     *     expires: int,
+     *     storage_path: string
+     *   }
+     * }|null
+     */
+    public function prepareRemoteUploadForBooking(string $originalName, string $mimeType, int $bookingId): ?array
+    {
+        $normalizedMime = trim($mimeType);
+        $this->assertSupportedMimeType($normalizedMime);
+
+        $safeName = $this->sanitizeFileName(pathinfo($originalName !== '' ? $originalName : 'delivery-file', PATHINFO_FILENAME));
+        $extension = self::ALLOWED_MIME_TYPES[$normalizedMime][0] ?? 'bin';
+        $storedName = sprintf('%s-%s.%s', $safeName, bin2hex(random_bytes(6)), $extension);
+        $upload = $this->objectStorage->createTemporaryUploadLink(
+            'booking-' . $bookingId,
+            $storedName,
+            $normalizedMime
+        );
+
+        if ($upload === null) {
             return null;
         }
 
-        $normalizedPath = ltrim(trim($storagePath), '/');
-        foreach ([$this->uploadDir, $this->legacyPublicUploadDir] as $rootDir) {
-            $root = rtrim($rootDir, '/');
-            $candidate = $root . '/' . $normalizedPath;
-            $resolvedRoot = realpath($root) ?: $root;
-            $resolvedCandidate = realpath($candidate);
+        return [
+            'file_name' => $originalName !== '' ? $originalName : 'delivery-file',
+            'storage_path' => $upload['storage_path'],
+            'mime_type' => $normalizedMime,
+            'upload' => $upload,
+        ];
+    }
 
-            if ($resolvedCandidate === false || !is_file($resolvedCandidate)) {
-                continue;
-            }
-
-            if ($resolvedCandidate === $resolvedRoot || str_starts_with($resolvedCandidate, $resolvedRoot . DIRECTORY_SEPARATOR)) {
-                return $resolvedCandidate;
-            }
+    /**
+     * @return array{mime_type: string, size_bytes: int}
+     */
+    public function validateStoredAttachmentObject(string $absolutePath, string $originalName): array
+    {
+        if (!is_file($absolutePath)) {
+            throw new \InvalidArgumentException('Stored delivery file was not found after upload.');
         }
 
-        return null;
+        $size = filesize($absolutePath);
+        $normalizedSize = is_int($size) ? $size : 0;
+        if ($normalizedSize <= 0 || $normalizedSize > self::MAX_FILE_SIZE_BYTES) {
+            throw new \InvalidArgumentException('Each delivery file must be between 1 byte and 15 MB.');
+        }
+
+        $file = new UploadedFile(
+            $absolutePath,
+            $originalName !== '' ? $originalName : 'delivery-file',
+            null,
+            null,
+            true
+        );
+
+        $mimeType = $this->uploadedFileSecurityInspector->detectAllowedMimeType($file, self::ALLOWED_MIME_TYPES);
+        if ($mimeType === null || !array_key_exists($mimeType, self::ALLOWED_MIME_TYPES)) {
+            throw new \InvalidArgumentException(sprintf('Unsupported delivery file type: %s', $mimeType ?? 'unknown'));
+        }
+
+        $this->uploadMalwareScanner->assertSafe($file, 'Delivery file');
+
+        return [
+            'mime_type' => $mimeType,
+            'size_bytes' => $normalizedSize,
+        ];
+    }
+
+    /**
+     * @return array{url: string, expires: int}|null
+     */
+    public function createTemporaryDownloadLink(?string $storagePath, int $ttlSeconds = 300): ?array
+    {
+        return $this->objectStorage->createTemporaryDownloadLink($storagePath, $ttlSeconds);
     }
 
     public function removeStoredAttachment(?string $storagePath): void
     {
-        $absolutePath = $this->resolveStoredAttachmentPath($storagePath);
-        if ($absolutePath === null) {
-            return;
-        }
-
-        if (is_file($absolutePath)) {
-            @unlink($absolutePath);
-        }
-
-        $directory = dirname($absolutePath);
-        $root = realpath($this->uploadDir) ?: rtrim($this->uploadDir, '/');
-
-        while (is_dir($directory) && str_starts_with($directory, $root) && $directory !== $root) {
-            $contents = scandir($directory);
-            if ($contents === false || count($contents) > 2) {
-                break;
-            }
-
-            @rmdir($directory);
-            $directory = dirname($directory);
-        }
+        $this->objectStorage->removeStoredPath($storagePath, [$this->uploadDir, $this->legacyPublicUploadDir], $this->uploadDir);
     }
 
     private function sanitizeFileName(string $name): string

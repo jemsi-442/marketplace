@@ -145,7 +145,7 @@ export default function RequestServiceCreatePage() {
   return (
     <DashboardShell
       title="Request setup"
-      subtitle="Write your need clearly on this page. After you submit, WOLFIX will manage the provider review and send you the next update."
+      subtitle="Write your need clearly here. WOLFIX will handle the review and next update."
       mobileQuickActions={
         <div className="grid grid-cols-2 gap-2">
           <Link href={detailHref}>
@@ -182,7 +182,7 @@ export default function RequestServiceCreatePage() {
                   <p className="mt-4 text-xs uppercase tracking-[0.22em] text-[var(--brand-primary)]">Request form</p>
                   <h2 className="mt-2 text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">{serviceType.data.name}</h2>
                   <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
-                    This request will stay platform-managed. WOLFIX will coordinate provider review and return with the clean next step.
+                    This request stays platform-managed. WOLFIX will coordinate review and return with the next step.
                   </p>
                   {insights ? <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">{insights.outcome}</p> : null}
                 </div>
@@ -196,7 +196,7 @@ export default function RequestServiceCreatePage() {
                 <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-muted)] p-5">
                   <div className="mb-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-primary)]">What do you need?</p>
-                    <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">Write one clear line about the outcome you want WOLFIX to coordinate.</p>
+                    <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">Write one clear line about the outcome you want.</p>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[var(--text-primary)]" htmlFor="client-request-summary-input">Request summary</label>
@@ -206,7 +206,7 @@ export default function RequestServiceCreatePage() {
                       {...form.register('request_summary')}
                       className="w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--brand-primary)]"
                     />
-                    <p className="text-sm text-[var(--text-secondary)]">Keep it outcome-focused so admin starts from the same understanding.</p>
+                    <p className="text-sm text-[var(--text-secondary)]">Keep it outcome-focused.</p>
                     {form.formState.errors.request_summary ? <p className="text-sm text-rose-600">{form.formState.errors.request_summary.message}</p> : null}
                   </div>
                 </div>
@@ -214,7 +214,7 @@ export default function RequestServiceCreatePage() {
                 <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-muted)] p-5">
                   <div className="mb-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-primary)]">Add useful details</p>
-                    <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">Mention pages, features, deliverables, or documents that matter for the work.</p>
+                    <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">Mention pages, features, deliverables, or documents that matter.</p>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[var(--text-primary)]" htmlFor="client-request-details-input">More details</label>
@@ -225,7 +225,7 @@ export default function RequestServiceCreatePage() {
                       {...form.register('scope_details')}
                       className="w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm leading-7 outline-none transition focus:border-[var(--brand-primary)]"
                     />
-                    <p className="text-sm text-[var(--text-secondary)]">A few useful details are enough. You do not need a long specification here.</p>
+                    <p className="text-sm text-[var(--text-secondary)]">A few useful details are enough.</p>
                   </div>
                 </div>
 
@@ -249,7 +249,7 @@ export default function RequestServiceCreatePage() {
                   <div className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-muted)] p-5">
                     <div className="mb-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-primary)]">Budget note</p>
-                      <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">Budget is optional, but useful if it will shape the admin review.</p>
+                      <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">Budget is optional, but useful.</p>
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-[var(--text-primary)]" htmlFor="client-request-budget-input">Budget note</label>
@@ -263,7 +263,7 @@ export default function RequestServiceCreatePage() {
                   </div>
                 </div>
 
-                {form.formState.isDirty ? <InlineStateNote tone="info" message="You have unsaved request details on this page." /> : null}
+                {form.formState.isDirty ? <InlineStateNote tone="info" message="You have unsaved request details." /> : null}
 
                 <div className="flex flex-wrap gap-3">
                   <Button type="submit" className="w-full sm:w-auto" disabled={createRequest.isPending || watchedRequestSummary.trim().length < 12}>
@@ -286,7 +286,7 @@ export default function RequestServiceCreatePage() {
                 </span>
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-[var(--brand-primary)]">Ready before submit</p>
-                  <h2 className="mt-2 text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">Use the details that help this lane start cleanly</h2>
+                  <h2 className="mt-2 text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">Bring the details that help this lane start cleanly</h2>
                 </div>
               </div>
               <div className="mt-5 space-y-4">
@@ -327,14 +327,14 @@ export default function RequestServiceCreatePage() {
                 </span>
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-[var(--brand-primary)]">Platform promise</p>
-                  <h2 className="mt-2 text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">Payment does not open on this page yet</h2>
+                  <h2 className="mt-2 text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">Payment does not open here yet</h2>
                 </div>
               </div>
               <p className="mt-4 text-sm leading-7 text-[var(--text-secondary)]">
-                This page creates the request only. WOLFIX first reviews the lane, compares the right vendor path, and sends back one clean update before any payment step becomes active.
+                This page creates the request only. WOLFIX reviews the lane and sends back one clean update before payment opens.
               </p>
               <div className="mt-5">
-                <InlineStateNote tone="info" message="Submit the request here first. Payment only opens after the managed review update is ready." />
+                <InlineStateNote tone="info" message="Submit here first. Payment opens after the review update is ready." />
               </div>
             </Card>
           </div>

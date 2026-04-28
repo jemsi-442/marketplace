@@ -14,10 +14,15 @@ use App\Entity\Escrow;
 use App\Entity\VendorServiceCapability;
 use App\Service\NotificationService;
 use App\Service\PasswordPolicy;
+use App\Service\SignedDownloadTokenService;
+use App\Service\VendorResumeStorage;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\QueryBuilder;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -224,6 +229,62 @@ final class AdminController extends AbstractController
         if ($view === 'unverified') {
             $qb->andWhere('u.isVerified = false');
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeVendorVerification(VendorProfile $profile): array
+    {
+        $user = $profile->getUser();
+
+        return [
+            'id' => $profile->getId(),
+            'vendor' => [
+                'user_id' => $user->getId(),
+                'email' => $user->getEmail(),
+                'company_name' => $profile->getCompanyName(),
+            ],
+            'professional_headline' => $profile->getProfessionalHeadline(),
+            'resume_highlights' => $profile->getResumeHighlights(),
+            'resume_uploaded' => $profile->getResumeStoragePath() !== null,
+            'resume_file_name' => $profile->getResumeOriginalName(),
+            'resume_uploaded_at' => $profile->getResumeUploadedAt()?->format('Y-m-d H:i:s'),
+            'verification_status' => $profile->getVerificationStatus(),
+            'verification_badge_granted' => $profile->isVerificationBadgeGranted(),
+            'verification_badge_granted_at' => $profile->getVerificationBadgeGrantedAt()?->format('Y-m-d H:i:s'),
+            'verification_review_note' => $profile->getVerificationReviewNote(),
+            'interview_score' => $profile->getInterviewScore(),
+            'interview_submitted_at' => $profile->getInterviewSubmittedAt()?->format('Y-m-d H:i:s'),
+            'interview_questions' => $profile->getInterviewQuestions() ?? [],
+            'interview_answers' => $profile->getInterviewAnswers() ?? [],
+            'interview_attempt_history' => $profile->getInterviewAttemptHistory() ?? [],
+        ];
+    }
+
+    private function applyVendorVerificationSearchFilter(QueryBuilder $qb, string $search): void
+    {
+        if ($search === '') {
+            return;
+        }
+
+        $normalized = '%' . mb_strtolower($search) . '%';
+        $qb
+            ->andWhere('LOWER(v.companyName) LIKE :search OR LOWER(u.email) LIKE :search OR LOWER(COALESCE(v.professionalHeadline, \'\')) LIKE :search')
+            ->setParameter('search', $normalized);
+    }
+
+    private function applyVendorVerificationViewFilter(QueryBuilder $qb, string $view): void
+    {
+        match ($view) {
+            'ready_review' => $qb
+                ->andWhere('v.interviewSubmittedAt IS NOT NULL')
+                ->andWhere('v.verificationBadgeGranted = false'),
+            'badge_active' => $qb->andWhere('v.verificationBadgeGranted = true'),
+            'needs_revision' => $qb->andWhere('v.verificationStatus = :needsRevision')->setParameter('needsRevision', VendorProfile::VERIFICATION_NEEDS_REVISION),
+            'missing_resume' => $qb->andWhere('v.resumeStoragePath IS NULL'),
+            default => null,
+        };
     }
 
     #[Route('/dashboard-summary', name: 'admin_dashboard_summary', methods: ['GET'])]
@@ -597,6 +658,190 @@ final class AdminController extends AbstractController
         }
 
         return $this->json($result);
+    }
+
+    #[Route('/vendor-verifications', name: 'admin_vendor_verifications_list', methods: ['GET'])]
+    public function listVendorVerifications(Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        $limit = $this->readListLimit($request, 10, 50);
+        $page = $this->readPage($request);
+        $search = $this->readSearch($request);
+        $view = $this->readEnumFilter($request, ['all', 'ready_review', 'badge_active', 'needs_revision', 'missing_resume']);
+
+        $baseQb = $em->getRepository(VendorProfile::class)
+            ->createQueryBuilder('v')
+            ->join('v.user', 'u');
+
+        $this->applyVendorVerificationSearchFilter($baseQb, $search);
+
+        $summaryBaseQb = clone $baseQb;
+        $itemsQb = clone $baseQb;
+        $this->applyVendorVerificationViewFilter($itemsQb, $view);
+
+        $totalItems = (int) (clone $itemsQb)
+            ->select('COUNT(v.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        [$page, $totalPages] = $this->clampPageWithinTotal($page, $totalItems, $limit);
+
+        $profiles = $itemsQb
+            ->select('v', 'u')
+            ->orderBy('v.resumeUploadedAt', 'DESC')
+            ->addOrderBy('v.id', 'DESC')
+            ->setFirstResult(($page - 1) * $limit)
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+
+        return $this->json([
+            'items' => array_map(fn (VendorProfile $profile): array => $this->serializeVendorVerification($profile), $profiles),
+            'page' => $page,
+            'page_size' => $limit,
+            'total_items' => $totalItems,
+            'total_pages' => $totalPages,
+            'summary' => [
+                'total' => (int) (clone $summaryBaseQb)->select('COUNT(v.id)')->getQuery()->getSingleScalarResult(),
+                'ready_review' => (int) (clone $summaryBaseQb)
+                    ->select('COUNT(v.id)')
+                    ->andWhere('v.interviewSubmittedAt IS NOT NULL')
+                    ->andWhere('v.verificationBadgeGranted = false')
+                    ->getQuery()
+                    ->getSingleScalarResult(),
+                'badge_active' => (int) (clone $summaryBaseQb)
+                    ->select('COUNT(v.id)')
+                    ->andWhere('v.verificationBadgeGranted = true')
+                    ->getQuery()
+                    ->getSingleScalarResult(),
+                'needs_revision' => (int) (clone $summaryBaseQb)
+                    ->select('COUNT(v.id)')
+                    ->andWhere('v.verificationStatus = :needsRevision')
+                    ->setParameter('needsRevision', VendorProfile::VERIFICATION_NEEDS_REVISION)
+                    ->getQuery()
+                    ->getSingleScalarResult(),
+                'missing_resume' => (int) (clone $summaryBaseQb)
+                    ->select('COUNT(v.id)')
+                    ->andWhere('v.resumeStoragePath IS NULL')
+                    ->getQuery()
+                    ->getSingleScalarResult(),
+            ],
+        ]);
+    }
+
+    #[Route('/vendor-verifications/{id}', name: 'admin_vendor_verifications_show', requirements: ['id' => '\d+'], methods: ['GET'])]
+    public function showVendorVerification(VendorProfile $profile): JsonResponse
+    {
+        return $this->json($this->serializeVendorVerification($profile));
+    }
+
+    #[Route('/vendor-verifications/{id}/resume-link', name: 'admin_vendor_verifications_resume_link', requirements: ['id' => '\d+'], methods: ['GET'])]
+    public function vendorVerificationResumeLink(
+        VendorProfile $profile,
+        SignedDownloadTokenService $signedDownloadTokenService,
+        VendorResumeStorage $resumeStorage
+    ): JsonResponse
+    {
+        $storagePath = $profile->getResumeStoragePath();
+        if ($storagePath === null) {
+            return $this->json(['error' => 'Resume not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $remoteLink = $resumeStorage->createTemporaryDownloadLink($storagePath);
+        if (is_array($remoteLink) && isset($remoteLink['url'], $remoteLink['expires'])) {
+            return $this->json([
+                'url' => (string) $remoteLink['url'],
+                'expires' => (int) $remoteLink['expires'],
+                'signature' => '',
+                'expires_at' => date(DATE_ATOM, (int) $remoteLink['expires']),
+            ]);
+        }
+
+        $token = $signedDownloadTokenService->issue('admin_vendor_resume_download', $storagePath);
+
+        return $this->json([
+            'url' => sprintf(
+                '/api/admin/vendor-verifications/%d/resume?expires=%d&signature=%s',
+                (int) $profile->getId(),
+                $token['expires'],
+                $token['signature']
+            ),
+            'expires' => $token['expires'],
+            'signature' => $token['signature'],
+            'expires_at' => date(DATE_ATOM, $token['expires']),
+        ]);
+    }
+
+    #[Route('/vendor-verifications/{id}/resume', name: 'admin_vendor_verifications_resume', requirements: ['id' => '\d+'], methods: ['GET'])]
+    public function downloadVendorVerificationResume(
+        VendorProfile $profile,
+        Request $request,
+        SignedDownloadTokenService $signedDownloadTokenService,
+        VendorResumeStorage $resumeStorage
+    ): Response
+    {
+        $storagePath = $profile->getResumeStoragePath();
+        if ($storagePath === null) {
+            return $this->json(['error' => 'Resume not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $expires = (int) $request->query->get('expires', 0);
+        $signature = $request->query->get('signature');
+        if (!$signedDownloadTokenService->isValid('admin_vendor_resume_download', $storagePath, $expires, is_string($signature) ? $signature : null)) {
+            return $this->json(['error' => 'Download link is invalid or has expired'], Response::HTTP_FORBIDDEN);
+        }
+
+        $absolutePath = $resumeStorage->resolveStoredResumePath($storagePath);
+        if ($absolutePath === null) {
+            return $this->json(['error' => 'Resume not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $response = new BinaryFileResponse($absolutePath);
+        $response->setPrivate();
+        $response->headers->set('Content-Type', $profile->getResumeMimeType() ?: 'application/octet-stream');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->setContentDisposition('attachment', $profile->getResumeOriginalName() ?? basename($absolutePath));
+
+        return $response;
+    }
+
+    #[Route('/vendor-verifications/{id}/review', name: 'admin_vendor_verifications_review', requirements: ['id' => '\d+'], methods: ['POST'])]
+    public function reviewVendorVerification(VendorProfile $profile, Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        $actor = $this->getUser();
+        if (!$actor instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], Response::HTTP_FORBIDDEN);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Invalid JSON payload'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $decision = isset($data['decision']) && is_string($data['decision']) ? trim($data['decision']) : '';
+        $reviewNote = isset($data['review_note']) && is_string($data['review_note']) ? trim($data['review_note']) : null;
+
+        if (!in_array($decision, ['approve', 'revoke'], true)) {
+            return $this->json(['error' => 'decision must be approve or revoke'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($decision === 'revoke' && ($reviewNote === null || $reviewNote === '')) {
+            return $this->json(['error' => 'review_note is required when revoking a blue tick'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($decision === 'approve') {
+            $profile->approveVerificationBadge($reviewNote);
+        } else {
+            $profile->revokeVerificationBadge($reviewNote);
+        }
+
+        $em->flush();
+
+        return $this->json([
+            'message' => $decision === 'approve'
+                ? 'Vendor verification approved and blue tick is active.'
+                : 'Vendor verification badge revoked and the profile now needs revision.',
+            'profile' => $this->serializeVendorVerification($profile),
+        ]);
     }
 
     #[Route('/analytics', name: 'admin_analytics', methods: ['GET'])]

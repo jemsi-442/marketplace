@@ -24,6 +24,7 @@ final class ListEndpointsFlowTest extends ApiTestCase
 
         $this->promoteUserToAdmin($adminRegistration['user']['email']);
         $this->seedVendorProfile((int) $vendorRegistration['user']['id'], 'List Fixture Vendor');
+        $this->markVendorVerified((int) $vendorRegistration['user']['id']);
 
         $clientLogin = $this->loginUser($clientRegistration['user']['email'], $password);
         $vendorLogin = $this->loginUser($vendorRegistration['user']['email'], $password);

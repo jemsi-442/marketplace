@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Layers3, Search, ShieldCheck, Sparkles, Workflow } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { Button } from '@/components/ui/button';
@@ -54,6 +54,119 @@ function formatDateTime(value?: string | null): string {
   }
 
   return parsed.toLocaleString('en-TZ');
+}
+
+type VendorLaneGuidance = {
+  cards: Array<{
+    title: string;
+    detail: string;
+    icon: ReactNode;
+  }>;
+  experiencePlaceholder: string;
+  turnaroundPlaceholder: string;
+  portfolioPlaceholder: string;
+  saveMessage: string;
+};
+
+function getVendorLaneGuidance(groupSlug: string, groupTitle: string): VendorLaneGuidance {
+  switch (groupSlug) {
+    case 'business-finance-support':
+      return {
+        cards: [
+          {
+            title: 'What to activate',
+            detail: 'Turn on the finance tasks your team can run repeatedly with clean records and believable control.',
+            icon: <Sparkles className="size-4" />,
+          },
+          {
+            title: 'What admin reviews',
+            detail: 'Check pricing, reporting clarity, turnaround, and proof for finance-sensitive work.',
+            icon: <ShieldCheck className="size-4" />,
+          },
+          {
+            title: 'What this lane unlocks',
+            detail: 'A strong finance lane helps you appear in bookkeeping, payroll, and reporting requests.',
+            icon: <Workflow className="size-4" />,
+          },
+        ],
+        experiencePlaceholder: 'Example: bookkeeping team for SMEs and monthly reporting support',
+        turnaroundPlaceholder: 'Example: 3 working days for a first reporting pack',
+        portfolioPlaceholder: 'Share the finance work you handle well, the size of teams you support, or the type of reporting/process cleanup you can deliver confidently.',
+        saveMessage: 'After you save, move into verification so WOLFIX can confirm this finance lane before it opens matched bookkeeping, payroll, and reporting requests.',
+      };
+    case 'content-media-communications':
+      return {
+        cards: [
+          {
+            title: 'What to activate',
+            detail: 'Turn on the content and communication work your team can produce clearly and consistently.',
+            icon: <Sparkles className="size-4" />,
+          },
+          {
+            title: 'What admin reviews',
+            detail: 'Check message quality, turnaround, production fit, and proof of client-facing work.',
+            icon: <ShieldCheck className="size-4" />,
+          },
+          {
+            title: 'What this lane unlocks',
+            detail: 'A strong content lane helps you appear in writing, podcast, translation, and media-pack requests.',
+            icon: <Workflow className="size-4" />,
+          },
+        ],
+        experiencePlaceholder: 'Example: editorial, podcast, and communication production support',
+        turnaroundPlaceholder: 'Example: 2 working days for article drafts and 4 for podcast edits',
+        portfolioPlaceholder: 'Share the kind of writing, editing, translation, or media production work your team has handled before and what makes the quality believable.',
+        saveMessage: 'After you save, move into verification so WOLFIX can confirm this communication lane before it opens writing, media, and publishing requests.',
+      };
+    case 'training-research-documentation':
+      return {
+        cards: [
+          {
+            title: 'What to activate',
+            detail: 'Turn on the research and documentation work your team can structure carefully.',
+            icon: <Sparkles className="size-4" />,
+          },
+          {
+            title: 'What admin reviews',
+            detail: 'Check document quality, structured thinking, proposal depth, and proof of formal written work.',
+            icon: <ShieldCheck className="size-4" />,
+          },
+          {
+            title: 'What this lane unlocks',
+            detail: 'A strong documentation lane helps you appear in proposal, SOP, reporting, and training-material requests.',
+            icon: <Workflow className="size-4" />,
+          },
+        ],
+        experiencePlaceholder: 'Example: proposal writing, SOP development, and donor reporting',
+        turnaroundPlaceholder: 'Example: 5 working days for a structured first draft',
+        portfolioPlaceholder: 'Share the kind of proposals, manuals, research packs, or reporting documents your team has handled and the institutions or businesses you support best.',
+        saveMessage: 'After you save, move into verification so WOLFIX can confirm this documentation lane before it opens proposal, research, and training requests.',
+      };
+    default:
+      return {
+        cards: [
+          {
+            title: 'What to activate',
+            detail: 'Turn on only the services your team can deliver clearly and with believable proof.',
+            icon: <Sparkles className="size-4" />,
+          },
+          {
+            title: 'What admin reviews',
+            detail: 'Price, portfolio note, turnaround, and lane clarity should make sense together.',
+            icon: <ShieldCheck className="size-4" />,
+          },
+          {
+            title: 'What this lane unlocks',
+            detail: `A clean approved ${groupTitle} lane feeds the matched request queue.`,
+            icon: <Workflow className="size-4" />,
+          },
+        ],
+        experiencePlaceholder: 'Example: standard, senior, expert...',
+        turnaroundPlaceholder: 'Example: 5 working days',
+        portfolioPlaceholder: 'Share the kind of work you have handled before or what makes your team strong in this lane.',
+        saveMessage: `After you save, move into verification so WOLFIX can confirm this ${groupTitle.toLowerCase()} lane before matched requests open.`,
+      };
+  }
 }
 
 export default function VendorCapabilityCategoryPage() {
@@ -232,10 +345,12 @@ export default function VendorCapabilityCategoryPage() {
     );
   }
 
+  const laneGuidance = getVendorLaneGuidance(group.slug, group.title);
+
   return (
     <DashboardShell
       title={group.title}
-      subtitle="Configure the exact capabilities your team can deliver inside this business lane. Save this lane when price, scope, and proof are ready for review."
+      subtitle="Configure the exact capabilities your team can deliver in this lane."
       mobileQuickActions={
         <div className="grid gap-3 sm:grid-cols-2">
           <Link href="/dashboard/vendor-capabilities">
@@ -244,9 +359,9 @@ export default function VendorCapabilityCategoryPage() {
               <ArrowRight className="size-4 rotate-180" />
             </Button>
           </Link>
-          <Link href="/dashboard/vendor-requests">
+          <Link href="/dashboard/vendor-verification">
             <Button className="w-full justify-between rounded-2xl bg-[var(--brand-primary)] px-4 py-5 text-white hover:bg-[var(--brand-primary-strong)]">
-              Open matched requests
+              Continue to verification
               <ArrowRight className="size-4" />
             </Button>
           </Link>
@@ -271,7 +386,7 @@ export default function VendorCapabilityCategoryPage() {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder={`Search inside ${group.title}`}
+                  placeholder={group.search_placeholder || `Search inside ${group.title}`}
                   className="w-full border-none bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
                 />
               </div>
@@ -283,23 +398,7 @@ export default function VendorCapabilityCategoryPage() {
         </Card>
 
         <div className="grid gap-4 xl:grid-cols-3">
-          {[
-            {
-              title: 'What to activate',
-              detail: 'Turn on only the services your team can deliver clearly, repeatedly, and with believable scope proof.',
-              icon: <Sparkles className="size-4" />,
-            },
-            {
-              title: 'What admin reviews',
-              detail: 'Price, portfolio note, turnaround, and lane clarity should make sense together before approval.',
-              icon: <ShieldCheck className="size-4" />,
-            },
-            {
-              title: 'What this lane unlocks',
-              detail: 'A clean approved lane feeds the matched request queue and gives you stronger fit inside vendor operations.',
-              icon: <Workflow className="size-4" />,
-            },
-          ].map((item) => (
+          {laneGuidance.cards.map((item) => (
             <Card key={item.title} className="flex h-full flex-col rounded-[26px] border border-[rgba(15,23,42,0.08)] p-5 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
               <div className="flex items-center gap-3">
                 <span className="flex size-10 items-center justify-center rounded-2xl bg-[rgba(16,185,129,0.10)] text-[var(--accent-teal)]">
@@ -425,7 +524,7 @@ export default function VendorCapabilityCategoryPage() {
                           value={draft.experience_level}
                           onChange={(event) => updateDraft(serviceType.id, { experience_level: event.target.value })}
                           className="mt-3 w-full rounded-[18px] border border-[var(--line)] px-4 py-3 text-sm outline-none transition focus:border-[var(--brand-primary)]"
-                          placeholder="standard, senior, expert..."
+                          placeholder={laneGuidance.experiencePlaceholder}
                         />
                       </div>
 
@@ -469,7 +568,7 @@ export default function VendorCapabilityCategoryPage() {
                           value={draft.turnaround_note}
                           onChange={(event) => updateDraft(serviceType.id, { turnaround_note: event.target.value })}
                           className="mt-3 w-full rounded-[18px] border border-[var(--line)] px-4 py-3 text-sm outline-none transition focus:border-[var(--brand-primary)]"
-                          placeholder="Example: 5 working days"
+                          placeholder={laneGuidance.turnaroundPlaceholder}
                         />
                       </div>
 
@@ -479,7 +578,7 @@ export default function VendorCapabilityCategoryPage() {
                           value={draft.portfolio_summary}
                           onChange={(event) => updateDraft(serviceType.id, { portfolio_summary: event.target.value })}
                           className="mt-3 min-h-[120px] w-full rounded-[18px] border border-[var(--line)] px-4 py-3 text-sm leading-7 outline-none transition focus:border-[var(--brand-primary)]"
-                          placeholder="Share the kind of work you have handled before or what makes your team strong in this lane."
+                          placeholder={laneGuidance.portfolioPlaceholder}
                         />
                       </div>
                     </div>
@@ -494,9 +593,9 @@ export default function VendorCapabilityCategoryPage() {
           <Button className="w-full sm:w-auto" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
             {saveMutation.isPending ? 'Saving this lane...' : 'Save this capability lane'}
           </Button>
-          <Link href="/dashboard/vendor-requests" className="w-full sm:w-auto">
+          <Link href="/dashboard/vendor-verification" className="w-full sm:w-auto">
             <Button variant="ghost" className="w-full sm:w-auto">
-              Open matched requests
+              Continue to verification
               <ArrowRight className="ml-2 size-4" />
             </Button>
           </Link>
@@ -504,7 +603,7 @@ export default function VendorCapabilityCategoryPage() {
 
         <InlineStateNote
           tone="success"
-          message={`You have ${selectedCount} active capability option${selectedCount === 1 ? '' : 's'} in this lane. After you save, WOLFIX can review and match the right requests into your vendor queue.`}
+          message={`You have ${selectedCount} active capability option${selectedCount === 1 ? '' : 's'} in this lane. ${laneGuidance.saveMessage}`}
         />
       </div>
     </DashboardShell>

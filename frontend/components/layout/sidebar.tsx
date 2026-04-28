@@ -35,6 +35,7 @@ function buildItems(roles: string[]): SidebarItem[] {
     return [
       { href: '/dashboard/vendor', label: 'Welcome', icon: LayoutDashboard },
       { href: '/dashboard/vendor-capabilities', label: 'Capability Lanes', icon: Activity },
+      { href: '/dashboard/vendor-verification', label: 'Verification', icon: ShieldCheck },
       { href: '/dashboard/vendor-requests', label: 'Requests', icon: ClipboardList },
       { href: '/dashboard/vendor-withdrawals', label: 'Withdrawals', icon: WalletCards },
       { href: '/dashboard', label: 'Bookings', icon: WalletCards },
@@ -47,6 +48,7 @@ function buildItems(roles: string[]): SidebarItem[] {
     { href: '/dashboard/admin', label: 'Welcome', icon: LayoutDashboard, roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
     { href: '/dashboard/admin-requests', label: 'Requests', icon: ClipboardList, roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
     { href: '/dashboard/admin-capabilities', label: 'Capability Lanes', icon: Activity, roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
+    { href: '/dashboard/admin-verifications', label: 'Vendor Verification', icon: ShieldCheck, roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
     { href: '/dashboard/admin-users', label: 'Users', icon: Users, roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
     { href: '/dashboard/admin-escrows', label: 'Disputes', icon: ShieldCheck, roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
     { href: '/dashboard', label: 'Bookings', icon: WalletCards, roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
@@ -80,19 +82,20 @@ export function Sidebar({ mobile = false, onNavigate, onClose, footerActions, ba
   return (
     <aside
       className={cn(
-        'flex h-full flex-col overflow-hidden rounded-[30px] border bg-[image:var(--nav-shell-bg)] text-[var(--nav-shell-text)]',
-        'border-[color:var(--nav-shell-border)]',
-        mobile ? 'shadow-[var(--nav-shell-shadow-mobile)]' : 'shadow-[var(--nav-shell-shadow)]',
+        'flex h-full flex-col overflow-hidden bg-[image:var(--nav-shell-bg)] text-[var(--nav-shell-text)]',
+        mobile
+          ? 'rounded-[28px] border border-[color:var(--nav-shell-border)] shadow-[var(--nav-shell-shadow-mobile)]'
+          : 'rounded-none border-0 shadow-none',
       )}
     >
-      <div className="flex items-center justify-between border-b border-[color:var(--nav-shell-line)] px-5 py-5">
+      <div className={cn('flex items-center justify-between border-b border-[color:var(--nav-shell-line)]', mobile ? 'px-5 py-5' : 'px-4 py-4')}>
         <div className="flex items-center gap-3">
-          <div className="flex size-11 items-center justify-center overflow-hidden rounded-2xl border border-[color:var(--nav-shell-line)] bg-[var(--nav-shell-chip)] backdrop-blur">
-            <Image src="/brand/wolfix-logo.svg" alt="WOLFIX DIGITAL AGENCY logo" width={40} height={40} className="h-full w-full object-cover" />
+          <div className="flex size-9 items-center justify-center overflow-hidden rounded-xl border border-[color:var(--nav-shell-line)] bg-[var(--nav-shell-chip)] backdrop-blur">
+            <Image src="/brand/wolfix-logo.svg" alt="WOLFIX DIGITAL AGENCY logo" width={30} height={30} className="h-7 w-7 object-cover" />
           </div>
           <div>
-            <p className="text-base font-semibold text-[var(--nav-shell-text)]">WOLFIX</p>
-            <p className="text-xs uppercase tracking-[0.16em] text-[var(--nav-shell-muted)]">Menu</p>
+            <p className="text-sm font-semibold text-[var(--nav-shell-text)]">WOLFIX</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--nav-shell-muted)]">Navigation</p>
           </div>
         </div>
         {mobile ? (
@@ -107,7 +110,7 @@ export function Sidebar({ mobile = false, onNavigate, onClose, footerActions, ba
         ) : null}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      <nav className={cn('flex-1 overflow-y-auto', mobile ? 'px-3 py-4' : 'px-3 py-4')}>
         <div className="space-y-1.5">
           {items.map((item) => {
             const active = isItemActive(pathname, item.href);
@@ -123,7 +126,7 @@ export function Sidebar({ mobile = false, onNavigate, onClose, footerActions, ba
                   'flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-medium transition',
                   active
                     ? 'bg-[image:var(--nav-shell-active)] text-white shadow-[var(--nav-shell-active-shadow)]'
-                    : 'text-[var(--nav-shell-text)] hover:bg-[var(--nav-shell-hover)] hover:text-[#0f172a]',
+                    : 'text-[var(--nav-shell-text)] hover:bg-[var(--nav-shell-hover)] hover:text-white',
                 )}
               >
                 <span className="flex items-center gap-3">
@@ -153,7 +156,11 @@ export function Sidebar({ mobile = false, onNavigate, onClose, footerActions, ba
         </div>
       </nav>
 
-      {footerActions ? <div className="border-t border-[color:var(--nav-shell-line)] px-4 py-4">{footerActions}</div> : null}
+      {footerActions ? (
+        <div className={cn('border-t border-[color:var(--nav-shell-line)] [&_.border-input]:border-[color:var(--nav-shell-line)] [&_.bg-background]:bg-[var(--nav-shell-footer-button)] [&_.bg-background]:text-white [&_.hover\\:bg-accent:hover]:bg-[var(--nav-shell-footer-button-hover)] [&_.hover\\:bg-accent:hover]:text-white', mobile ? 'px-4 py-4' : 'px-4 py-4')}>
+          {footerActions}
+        </div>
+      ) : null}
     </aside>
   );
 }

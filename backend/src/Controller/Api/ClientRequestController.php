@@ -453,6 +453,10 @@ final class ClientRequestController extends AbstractController
             return $this->json(['error' => 'Vendor profile required'], 422);
         }
 
+        if (!$vendorProfile->isVerificationBadgeGranted()) {
+            return $this->json(['error' => 'Complete vendor verification before sending a proposal'], 403);
+        }
+
         if (!in_array($clientRequest->getStatus(), [
             ClientRequest::STATUS_SUBMITTED,
             ClientRequest::STATUS_MATCHED,

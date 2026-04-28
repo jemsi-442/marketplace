@@ -42,6 +42,13 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: rootDir,
   experimental: {
     webpackBuildWorker: false,
+    ...(process.env.PLAYWRIGHT_BUILD_SINGLE_WORKER === '1' ? { cpus: 1 } : {}),
+  },
+  typescript: {
+    // Playwright production-like runs already execute `npm run typecheck`
+    // separately. Skipping Next's build-time typecheck avoids the unstable
+    // worker path that is currently breaking local production builds.
+    ignoreBuildErrors: process.env.PLAYWRIGHT_BUILD_SKIP_TYPECHECK === '1',
   },
   async headers() {
     const isProduction = process.env.NODE_ENV === 'production';

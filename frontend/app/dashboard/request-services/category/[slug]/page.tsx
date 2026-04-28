@@ -96,6 +96,7 @@ export default function RequestServiceCategoryPage() {
   if (serviceGroupsQuery.isLoading) {
     return (
       <DashboardShell title="Service lane" subtitle="Loading this business lane now.">
+      
         <Skeleton className="h-56 rounded-[30px]" />
       </DashboardShell>
     );
@@ -110,7 +111,7 @@ export default function RequestServiceCategoryPage() {
         <EmptyState
           icon={<Search className="size-5" />}
           title="This category does not exist"
-          description="Go back to the business lanes page and choose one of the visible lanes."
+          description="Go back and choose one of the visible lanes."
         />
       </DashboardShell>
     );
@@ -147,7 +148,7 @@ export default function RequestServiceCategoryPage() {
             </div>
 
             <div className="rounded-[26px] border border-[rgba(15,23,42,0.08)] bg-white/92 p-5 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-tertiary)]">Search this category</p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-tertiary)]">Search this lane</p>
               <div className="mt-4 flex items-center gap-3 rounded-[22px] border border-[var(--line)] bg-white px-4 py-3">
                 <Search className="size-4 text-[var(--text-secondary)]" />
                 <input
@@ -158,7 +159,7 @@ export default function RequestServiceCategoryPage() {
                 />
               </div>
               <p className="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
-                Search stays inside this business lane only, so results stay relevant.
+                Search stays inside this lane only.
               </p>
             </div>
           </div>
@@ -173,12 +174,12 @@ export default function RequestServiceCategoryPage() {
                 icon: <Sparkles className="size-4" />,
               },
               {
-                title: 'Strong request angle',
+                title: 'Best angle',
                 detail: groupSignals.requestAngle,
                 icon: <Layers3 className="size-4" />,
               },
               {
-                title: 'Commercial path',
+                title: 'Next path',
                 detail: groupSignals.commercialPath,
                 icon: <Workflow className="size-4" />,
               },
@@ -230,7 +231,7 @@ export default function RequestServiceCategoryPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--brand-primary)]">Open one service</p>
-              <h2 className="mt-2 text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">Choose the exact service inside this lane</h2>
+              <h2 className="mt-2 text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">Choose the exact service</h2>
             </div>
             <p className="text-sm text-[var(--text-secondary)]">{filteredServiceTypes.length} visible services</p>
           </div>
@@ -254,7 +255,7 @@ export default function RequestServiceCategoryPage() {
               <EmptyState
                 icon={<Search className="size-5" />}
                 title="No service matches this view"
-                description="Try a broader search or switch subcategory to reopen the full service lane."
+                description="Try a broader search or switch subcategory."
               />
             </div>
           ) : (
@@ -271,20 +272,20 @@ export default function RequestServiceCategoryPage() {
                     </span>
                   </div>
                   <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
-                    {serviceType.description || 'Open this service to understand how WOLFIX will coordinate the request, review, and next payment step.'}
+                    {serviceType.description || 'Open this service to see how WOLFIX will coordinate the request and next step.'}
                   </p>
                   <div className="mt-4 rounded-[22px] border border-[var(--line)] bg-[var(--panel-muted)] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-primary)]">Why clients open this</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--brand-primary)]">Why open this</p>
                     <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
                       {getServiceCardCue(serviceType)}
                     </p>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <span className="rounded-full border border-[var(--line)] bg-[rgba(248,250,252,0.92)] px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-                      Admin-managed assignment
+                      Managed assignment
                     </span>
                     <span className="rounded-full border border-[var(--line)] bg-[rgba(248,250,252,0.92)] px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-                      Category search active
+                      Search active
                     </span>
                     <span className="rounded-full border border-[var(--line)] bg-[rgba(248,250,252,0.92)] px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">
                       <span className="inline-flex items-center gap-1">

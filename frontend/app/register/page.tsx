@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { BriefcaseBusiness, Eye, EyeOff, ShieldCheck, Sparkles, Wallet } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
@@ -14,6 +14,7 @@ import { Card } from '@/components/ui/card';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { FormHint } from '@/components/ui/form-hint';
 import { SocialAuthButtons } from '@/components/auth/social-auth-buttons';
+import { AuthTopbar } from '@/components/layout/auth-topbar';
 import { InstallCtaButton } from '@/components/pwa/install-cta-button';
 import { apiClient } from '@/lib/api/client';
 import { toLoginHref } from '@/lib/auth/login-link';
@@ -39,7 +40,7 @@ const registerSchema = z
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
-export default function RegisterPage() {
+function RegisterPageView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registerUser = useAuthStore((state) => state.register);
@@ -80,12 +81,12 @@ export default function RegisterPage() {
   const roleSetupCopy = watchedType === 'vendor'
     ? {
         lane: 'Vendor studio',
-        cue: 'Open capability lanes, respond to live projects, and open payout flow when earnings become visible.',
+        cue: 'Open capability lanes and respond to live work.',
         signal: 'Sell digital services',
       }
     : {
         lane: 'Client workspace',
-        cue: 'Browse business lanes, open protected bookings, and follow delivery from one clean desk.',
+        cue: 'Browse lanes, book work, and track delivery.',
         signal: 'Buy digital services',
       };
 
@@ -176,12 +177,12 @@ export default function RegisterPage() {
     ? {
         lane: 'Client workspace',
         signal: 'Buyer lane',
-        cue: 'Sign in to browse lanes, open protected bookings, and follow delivery from one place.',
+        cue: 'Sign in to browse lanes and track delivery.',
       }
     : {
         lane: 'Vendor studio',
         signal: 'Seller lane',
-        cue: 'Sign in to open capability lanes, reply to live projects, and open payout flow when balance is visible.',
+        cue: 'Sign in to open capability lanes and reply to live work.',
       };
   const verificationPageHref = toVerificationPageHref(success?.verificationUrl, {
     email: success?.email,
@@ -231,31 +232,11 @@ export default function RegisterPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-10 lg:px-8">
-      <div className="flex w-full flex-1 items-center">
+    <main className="flex min-h-screen flex-col">
+      <AuthTopbar subtitle="Open your workspace" primaryHref="/login" primaryLabel="Sign in" />
+      <div className="mx-auto flex w-full max-w-7xl flex-1 items-center px-6 py-10 lg:px-8">
         <div className="w-full">
-        <div className="mb-6 flex items-center justify-between rounded-[28px] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] px-5 py-4 shadow-[var(--shadow-soft)] backdrop-blur-2xl">
-          <div className="flex items-center gap-4">
-            <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[rgba(255,255,255,0.94)] shadow-[0_12px_30px_rgba(7,24,84,0.18)]">
-              <Image src="/brand/wolfix-logo.svg" alt="WOLFIX DIGITAL AGENCY logo" width={50} height={50} className="h-[50px] w-[50px] object-cover" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.26em] text-[var(--brand-secondary)]">WOLFIX DIGITAL AGENCY</p>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">Open a polished workspace for digital services</p>
-            </div>
-          </div>
-          <div className="hidden items-center gap-3 md:flex">
-            <InstallCtaButton variant="ghost" />
-            <Link href="/">
-              <Button variant="ghost">Home</Button>
-            </Link>
-            <Link href="/login">
-              <Button>Sign in</Button>
-            </Link>
-          </div>
-        </div>
-
-        <div className="grid w-full gap-6 lg:grid-cols-[1fr_1fr]">
+          <div className="grid w-full gap-6 lg:grid-cols-[1fr_1fr]">
         <Card className="flex flex-col justify-between">
           <div>
             <div className="mb-5 flex items-center gap-4">
@@ -269,7 +250,7 @@ export default function RegisterPage() {
             </div>
             <h1 className="font-display text-4xl leading-tight">Create your place inside the WOLFIX marketplace.</h1>
             <p className="mt-5 max-w-xl text-base leading-8 text-[var(--text-secondary)]">
-              Open one account and move into a clean lane for services, payments, and delivery updates.
+              Create one account and choose your lane.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <InstallCtaButton variant="ghost" />
@@ -282,7 +263,7 @@ export default function RegisterPage() {
               <div className="mt-5 rounded-[20px] border border-[rgba(59,130,246,0.22)] bg-[rgba(239,246,255,0.92)] p-4">
                 <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--brand-primary)]">Choose your lane first</p>
                 <p className="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
-                  We found a new {socialProviderLabel} account for {hintedEmail || 'this email'}. Pick how you will use WOLFIX first, then continue with {socialProviderLabel} so we can open the right workspace.
+                  We found a new {socialProviderLabel} account for {hintedEmail || 'this email'}. Pick a role first, then continue.
                 </p>
               </div>
             ) : null}
@@ -291,7 +272,7 @@ export default function RegisterPage() {
             <div className="flex items-end justify-between gap-3">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Onboarding path</p>
-                <p className="mt-2 font-display text-2xl text-[var(--text-primary)]">Open your lane</p>
+                <p className="mt-2 font-display text-2xl text-[var(--text-primary)]">Three quick steps</p>
               </div>
               <div className="rounded-full border border-[rgba(79,70,229,0.14)] bg-[rgba(79,70,229,0.06)] px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-[var(--brand-primary)]">
                 Verified entry
@@ -367,7 +348,7 @@ export default function RegisterPage() {
                 <option value="vendor">Provide capability lanes</option>
                 <option value="client">Request managed services</option>
               </select>
-              <FormHint text="Choose the main way you will start using the workspace. This can shape the first screens you see." />
+              <FormHint text="Choose how you want to start." />
               <div className="rounded-[18px] border border-[var(--line)] bg-[var(--panel-muted)] px-4 py-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full border border-[rgba(79,70,229,0.14)] bg-[rgba(79,70,229,0.06)] px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[var(--brand-primary)]">
@@ -385,7 +366,7 @@ export default function RegisterPage() {
               <div>
                 <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Quick account setup</p>
                 <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                  Use Google or GitHub and we will open a verified account in the {watchedType === 'vendor' ? 'vendor studio' : 'client workspace'} lane you chose above.
+                  Use Google or GitHub for the {watchedType === 'vendor' ? 'vendor studio' : 'client workspace'} you chose above.
                 </p>
               </div>
               <SocialAuthButtons
@@ -408,7 +389,7 @@ export default function RegisterPage() {
                 </span>
                 <div>
                   <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Email setup</p>
-                  <p className="mt-1 text-sm text-[var(--text-secondary)]">Create a password-based account if you want a direct email route alongside Google or GitHub access.</p>
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">Use email and password if you prefer direct sign-in.</p>
                 </div>
               </div>
             </div>
@@ -416,7 +397,7 @@ export default function RegisterPage() {
             <div className="space-y-2">
               <label className="text-sm text-[var(--text-secondary)]" htmlFor="register-email">Email</label>
               <input id="register-email" type="email" placeholder="founder@marketplace.com" {...form.register('email')} />
-              <FormHint text="Use an address you can verify immediately. Account access stays limited until verification is complete." />
+              <FormHint text="Use an email you can verify now." />
               {form.formState.errors.email ? <p className="text-sm text-rose-600">{form.formState.errors.email.message}</p> : null}
             </div>
 
@@ -462,7 +443,7 @@ export default function RegisterPage() {
                   {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
-              <FormHint text="Repeat the password exactly so the account can be created without delay." />
+              <FormHint text="Repeat the same password." />
               {form.formState.errors.confirmPassword ? <p className="text-sm text-rose-600">{form.formState.errors.confirmPassword.message}</p> : null}
             </div>
 
@@ -497,10 +478,10 @@ export default function RegisterPage() {
                   <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Next step</p>
                   <p className="mt-2 text-sm text-[var(--text-secondary)]">
                     {success.verificationRequired === false
-                      ? 'Your account is ready. Continue to sign in and open the workspace.'
+                      ? 'Your account is ready. Sign in now.'
                       : success.verificationUrl
-                        ? 'Open the verification link first, then return to sign in once access is confirmed.'
-                        : 'Check your inbox for the verification email, then return to sign in once access is confirmed.'}
+                        ? 'Open the verification link first.'
+                        : 'Check your inbox for the verification email first.'}
                   </p>
                   <p className="mt-3 text-sm text-[var(--text-secondary)]">{successLaneCopy?.cue}</p>
                   <div className="mt-4 flex flex-wrap gap-3">
@@ -557,5 +538,21 @@ export default function RegisterPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function RegisterPageFallback() {
+  return (
+    <main className="flex min-h-screen items-center justify-center px-6 py-10 text-[var(--text-secondary)]">
+      Preparing account setup...
+    </main>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<RegisterPageFallback />}>
+      <RegisterPageView />
+    </Suspense>
   );
 }

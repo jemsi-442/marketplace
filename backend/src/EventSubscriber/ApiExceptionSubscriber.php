@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\EventSubscriber;
 
+use JsonException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -43,9 +44,16 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
             'message' => $message,
         ];
 
+        $requestId = $request->attributes->get(ApiRequestTraceSubscriber::ATTRIBUTE);
+        if (is_string($requestId) && $requestId !== '') {
+            $response['request_id'] = $requestId;
+        }
+
         if ($debugPayload !== []) {
             $response['debug'] = $debugPayload;
         }
+
+        $this->logApiException($requestId, $request->getMethod(), $request->getPathInfo(), $statusCode, $error, $throwable);
 
         $event->setResponse(new JsonResponse($response, $statusCode));
     }
@@ -102,5 +110,34 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
             404 => 'not_found',
             default => 'request_failed',
         };
+    }
+
+    private function logApiException(mixed $requestId, string $method, string $path, int $statusCode, string $error, Throwable $throwable): void
+    {
+        $payload = [
+            'scope' => 'api_exception',
+            'request_id' => is_string($requestId) && $requestId !== '' ? $requestId : null,
+            'method' => $method,
+            'path' => $path,
+            'status' => $statusCode,
+            'error' => $error,
+            'exception' => $throwable::class,
+            'message' => $throwable->getMessage(),
+        ];
+
+        try {
+            error_log(json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+        } catch (JsonException) {
+            error_log(sprintf(
+                '[api_exception] %s %s status=%d error=%s request_id=%s exception=%s message=%s',
+                $method,
+                $path,
+                $statusCode,
+                $error,
+                is_string($requestId) && $requestId !== '' ? $requestId : '-',
+                $throwable::class,
+                $throwable->getMessage(),
+            ));
+        }
     }
 }

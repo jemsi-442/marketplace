@@ -26,6 +26,50 @@ export interface VerificationResponse {
   verification_url?: string;
 }
 
+export interface SignedDownloadLinkResponse {
+  url: string;
+  expires: number;
+  signature: string;
+  expires_at: string;
+}
+
+export interface DirectUploadDescriptor {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  expires: number;
+  expires_at: string;
+}
+
+export interface DirectUploadFinalizeDescriptor {
+  url: string;
+  expires: number;
+  expires_at: string;
+  token: string;
+}
+
+export interface VendorResumeDirectUploadPrepareResponse {
+  message: string;
+  file_name: string;
+  mime_type: string;
+  storage_path: string;
+  upload: DirectUploadDescriptor;
+  finalize: DirectUploadFinalizeDescriptor;
+}
+
+export interface DeliveryDirectUploadPreparedFile {
+  file_name: string;
+  mime_type: string;
+  storage_path: string;
+  upload: DirectUploadDescriptor;
+  finalize: DirectUploadFinalizeDescriptor;
+}
+
+export interface DeliveryDirectUploadPrepareResponse {
+  message: string;
+  files: DeliveryDirectUploadPreparedFile[];
+}
+
 export interface RefreshResponse {
   expires_in: number;
   user?: AuthUser;
@@ -45,6 +89,26 @@ export interface VendorProfile {
   bio?: string | null;
   website?: string | null;
   portfolio_link?: string | null;
+  professional_headline?: string | null;
+  resume_highlights?: string | null;
+  resume_uploaded?: boolean;
+  resume_file_name?: string | null;
+  resume_mime_type?: string | null;
+  resume_uploaded_at?: string | null;
+  verification_status?: string | null;
+  verification_badge_granted?: boolean;
+  verification_badge_granted_at?: string | null;
+  verification_review_note?: string | null;
+  interview_score?: number | null;
+  interview_submitted_at?: string | null;
+  interview_questions?: VendorInterviewQuestion[];
+  interview_attempt_history?: Array<{
+    submitted_at: string;
+    score: number;
+    passed: boolean;
+    note?: string | null;
+    badge_granted?: boolean;
+  }>;
   user_id?: number;
   message?: string;
 }
@@ -59,6 +123,10 @@ export interface VendorDashboardSummary {
   protected_bookings: number;
   available_balance_minor: number;
   currency: string;
+  verification_status?: string | null;
+  verification_badge_granted?: boolean;
+  resume_uploaded?: boolean;
+  interview_score?: number | null;
 }
 
 export interface ClientDashboardSummary {
@@ -82,6 +150,30 @@ export interface AdminMetricsHealth {
   message: string;
   last_snapshot_date?: string;
   snapshot_age_hours?: number;
+}
+
+export interface AdminOpsOverview {
+  status: 'HEALTHY' | 'ATTENTION';
+  checked_at: string;
+  app_env: string;
+  request_tracing: {
+    enabled: boolean;
+  };
+  object_storage: {
+    status: 'READY' | 'UNSUPPORTED';
+    driver: string;
+    message: string;
+  };
+  metrics_pipeline: AdminMetricsHealth;
+  upload_scanning: {
+    status: 'READY' | 'DISABLED' | 'DEGRADED';
+    enabled: boolean;
+    binary: string;
+    binary_available: boolean;
+    timeout_seconds: number;
+    fail_closed: boolean;
+    message: string;
+  };
 }
 
 export interface AdminDashboardSummary {
@@ -118,6 +210,105 @@ export interface VendorProfileInput {
   bio?: string | null;
   website?: string | null;
   portfolioLink?: string | null;
+  professionalHeadline?: string | null;
+  resumeHighlights?: string | null;
+}
+
+export interface VendorInterviewQuestion {
+  id: string;
+  title: string;
+  prompt: string;
+  keywords?: string[];
+  practical_signals?: string[];
+}
+
+export interface VendorInterviewAnswerInput {
+  question_id: string;
+  answer: string;
+}
+
+export interface VendorProfileResponse {
+  message: string;
+  profile: VendorProfile;
+}
+
+export interface VendorInterviewGenerateResponse extends VendorProfileResponse {
+  questions: VendorInterviewQuestion[];
+}
+
+export interface VendorInterviewSubmitResponse extends VendorProfileResponse {
+  score: number;
+  passed: boolean;
+  feedback_summary?: {
+    strong_answers: number;
+    weak_answers: number;
+    generic_flags: number;
+    timeline_strength: number;
+    strong_signals: string[];
+    missing_signals: string[];
+    strength_summary: string;
+    gap_summary: string;
+  };
+}
+
+export interface AdminVendorVerificationRecord {
+  id: number;
+  vendor: {
+    user_id: number;
+    email: string;
+    company_name?: string | null;
+  };
+  professional_headline?: string | null;
+  resume_highlights?: string | null;
+  resume_uploaded: boolean;
+  resume_file_name?: string | null;
+  resume_uploaded_at?: string | null;
+  verification_status: string;
+  verification_badge_granted: boolean;
+  verification_badge_granted_at?: string | null;
+  verification_review_note?: string | null;
+  interview_score?: number | null;
+  interview_submitted_at?: string | null;
+  interview_questions: VendorInterviewQuestion[];
+  interview_attempt_history?: Array<{
+    submitted_at: string;
+    score: number;
+    passed: boolean;
+    note?: string | null;
+    badge_granted?: boolean;
+  }>;
+  interview_answers: Array<{
+    question_id: string;
+    answer: string;
+    word_count?: number;
+    keyword_hits?: number;
+    practical_signal_hits?: number;
+    lane_practical_signal_hits?: number;
+    timeline_signal_hits?: number;
+    number_signals?: number;
+    generic_phrase_hits?: number;
+    score?: number;
+  }>;
+}
+
+export interface AdminVendorVerificationListResponse {
+  items: AdminVendorVerificationRecord[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  summary: {
+    total: number;
+    ready_review: number;
+    badge_active: number;
+    needs_revision: number;
+    missing_resume: number;
+  };
+}
+
+export interface AdminVendorVerificationReviewResponse {
+  message: string;
+  profile: AdminVendorVerificationRecord;
 }
 
 export interface ServiceTypeRecord {
@@ -153,6 +344,8 @@ export interface ClientRequestRecord {
     name: string;
     slug: string;
     category?: string | null;
+    group_slug?: string | null;
+    group_title?: string | null;
     requires_admin_assignment: boolean;
   };
   request_summary: string;
@@ -368,6 +561,8 @@ export interface AdminClientRequestRecord {
     name: string;
     slug: string;
     category?: string | null;
+    group_slug?: string | null;
+    group_title?: string | null;
   };
   request_summary: string;
   scope_details?: string | null;

@@ -34,3 +34,13 @@ framework:
             policy: 'sliding_window'
             limit: 5
             interval: '10 minutes'
+
+        vendor_resume_upload:
+            policy: 'sliding_window'
+            limit: 4
+            interval: '15 minutes'
+
+        delivery_upload:
+            policy: 'sliding_window'
+            limit: 6
+            interval: '10 minutes'

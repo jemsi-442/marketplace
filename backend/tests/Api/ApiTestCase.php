@@ -108,6 +108,28 @@ SQL,
         );
     }
 
+    protected function markVendorVerified(int $userId, int $score = 78): void
+    {
+        $this->db->executeStatement(
+            <<<'SQL'
+UPDATE vendor_profile
+SET verification_status = :status,
+    verification_badge_granted = 1,
+    verification_badge_granted_at = NOW(),
+    verification_review_note = :review_note,
+    interview_score = :score,
+    interview_submitted_at = NOW()
+WHERE user_id = :user_id
+SQL,
+            [
+                'status' => 'verified',
+                'review_note' => 'Fixture verification granted for request access.',
+                'score' => $score,
+                'user_id' => $userId,
+            ]
+        );
+    }
+
     protected function firstServiceTypeId(): int
     {
         return (int) $this->db->fetchOne('SELECT id FROM service_type ORDER BY id ASC LIMIT 1');

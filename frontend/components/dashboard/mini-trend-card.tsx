@@ -1,6 +1,13 @@
+import {
+  accentToRgba,
+  formatCompactNumber,
+} from '@/components/dashboard/chart-utils';
+import { TrendStage } from '@/components/dashboard/trend-stage';
+
 interface MiniTrendPoint {
   label: string;
   value: number;
+  timestamp?: number;
 }
 
 interface MiniTrendCardProps {
@@ -13,13 +20,6 @@ interface MiniTrendCardProps {
   points: MiniTrendPoint[];
 }
 
-function formatCompact(value: number): string {
-  return new Intl.NumberFormat('en', {
-    notation: 'compact',
-    maximumFractionDigits: value >= 1000 ? 1 : 0,
-  }).format(value);
-}
-
 export function MiniTrendCard({
   eyebrow,
   title,
@@ -29,32 +29,12 @@ export function MiniTrendCard({
   accent,
   points,
 }: MiniTrendCardProps) {
-  const safePoints = points.length
-    ? points
-    : [
-        { label: 'P1', value: 0 },
-        { label: 'P2', value: 0 },
-        { label: 'P3', value: 0 },
-        { label: 'P4', value: 0 },
-      ];
-  const chartWidth = 420;
-  const chartHeight = 140;
-  const paddingX = 16;
-  const paddingY = 16;
-  const maxValue = Math.max(...safePoints.map((point) => point.value), 1);
-  const stepX = (chartWidth - paddingX * 2) / Math.max(safePoints.length - 1, 1);
-  const line = safePoints
-    .map((point, index) => {
-      const x = paddingX + index * stepX;
-      const y = chartHeight - paddingY - (point.value / maxValue) * (chartHeight - paddingY * 2);
-
-      return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
-    })
-    .join(' ');
-  const area = `${line} L ${paddingX + stepX * (safePoints.length - 1)} ${chartHeight - paddingY} L ${paddingX} ${chartHeight - paddingY} Z`;
-  const total = safePoints.reduce((sum, point) => sum + point.value, 0);
-  const latest = safePoints[safePoints.length - 1]?.value ?? 0;
-  const peak = Math.max(...safePoints.map((point) => point.value), 0);
+  const hasData = points.length > 0;
+  const total = points.reduce((sum, point) => sum + point.value, 0);
+  const latest = points[points.length - 1]?.value ?? 0;
+  const previous = points[points.length - 2]?.value ?? null;
+  const peak = Math.max(...points.map((point) => point.value), 0);
+  const delta = previous === null ? null : latest - previous;
 
   return (
     <div className="rounded-[24px] border border-[var(--line)] bg-[rgba(255,255,255,0.96)] p-5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] transition duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.08)]">
@@ -67,8 +47,8 @@ export function MiniTrendCard({
         <div
           className="rounded-full border px-3 py-2 text-[11px] uppercase tracking-[0.16em]"
           style={{
-            borderColor: `${accent}33`,
-            backgroundColor: `${accent}14`,
+            borderColor: accentToRgba(accent, 0.22),
+            backgroundColor: accentToRgba(accent, 0.1),
             color: accent,
           }}
         >
@@ -84,51 +64,36 @@ export function MiniTrendCard({
         ].map(([label, value]) => (
           <div key={label} className="rounded-[18px] border border-[var(--line)] bg-[var(--panel-muted)] px-4 py-4">
             <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">{label}</p>
-            <p className="mt-2 text-base font-semibold text-[var(--text-primary)]">{formatCompact(Number(value))}</p>
+            <p className="mt-2 text-base font-semibold text-[var(--text-primary)]">{hasData ? formatCompactNumber(Number(value)) : '--'}</p>
           </div>
         ))}
       </div>
 
       <div className="mt-5">
-        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="h-36 w-full">
-          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-            const y = paddingY + ratio * (chartHeight - paddingY * 2);
-            return (
-              <line
-                key={ratio}
-                x1={paddingX}
-                x2={chartWidth - paddingX}
-                y1={y}
-                y2={y}
-                stroke="rgba(148,163,184,0.16)"
-                strokeWidth="1"
-                strokeDasharray="4 7"
-              />
-            );
-          })}
-          <path d={area} fill={`${accent}20`} />
-          <path d={line} fill="none" stroke={accent} strokeWidth="3" strokeLinecap="round" />
-          {safePoints.map((point, index) => {
-            const x = paddingX + index * stepX;
-            const y = chartHeight - paddingY - (point.value / maxValue) * (chartHeight - paddingY * 2);
-
-            return (
-              <g key={`${point.label}-${index}`}>
-                <circle cx={x} cy={y} r="4.5" fill={accent} />
-                <text x={x} y={chartHeight - 4} textAnchor="middle" fill="var(--text-tertiary)" fontSize="11">
-                  {point.label}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
+        {hasData ? (
+          <TrendStage
+            points={points}
+            accent={accent}
+            width={420}
+            height={160}
+            paddingLeft={14}
+            paddingRight={50}
+            paddingTop={18}
+            paddingBottom={28}
+            valueFormatter={formatCompactNumber}
+          />
+        ) : (
+          <div className="flex h-40 items-center justify-center rounded-[20px] border border-dashed border-[var(--line)] bg-[var(--panel-muted)] px-5 text-center text-sm text-[var(--text-secondary)]">
+            Trend data will appear here once recent activity reaches this lane.
+          </div>
+        )}
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-4">
         <div className="rounded-full border border-[var(--line)] bg-[var(--panel-muted)] px-3 py-2 text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
-          Signal graph
+          {delta === null ? 'Waiting for trend' : delta >= 0 ? `Up ${formatCompactNumber(delta)}` : `Down ${formatCompactNumber(Math.abs(delta))}`}
         </div>
-        <p className="text-sm text-[var(--text-secondary)]">{safePoints.length} recent points</p>
+        <p className="text-sm text-[var(--text-secondary)]">{points.length} recent points</p>
       </div>
     </div>
   );

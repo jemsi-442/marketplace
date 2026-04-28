@@ -124,6 +124,10 @@ final class VendorRequestFeedController extends AbstractController
             return $this->json(['error' => 'Vendor profile required'], 422);
         }
 
+        if (!$vendorProfile->isVerificationBadgeGranted()) {
+            return $this->json(['error' => 'Complete vendor verification before opening matched requests'], 403);
+        }
+
         $limit = $this->readListLimit($request, 10, 50);
         $page = $this->readPage($request);
         $search = $this->readSearch($request);
@@ -295,6 +299,10 @@ final class VendorRequestFeedController extends AbstractController
         $vendorProfile = $user->getVendorProfile();
         if ($vendorProfile === null) {
             return $this->json(['error' => 'Vendor profile required'], 422);
+        }
+
+        if (!$vendorProfile->isVerificationBadgeGranted()) {
+            return $this->json(['error' => 'Complete vendor verification before opening matched requests'], 403);
         }
 
         $interest = $interestRepository->findOneBy([

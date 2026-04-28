@@ -10,6 +10,8 @@ import { InstallPrompt } from '@/components/pwa/install-prompt';
 export function SiteChrome() {
   const pathname = usePathname();
   const isDashboard = pathname?.startsWith('/dashboard') ?? false;
+  const isAuthPage = pathname === '/login' || pathname === '/register';
+  const hasCustomMarketingShell = pathname === '/';
 
   return (
     <>
@@ -29,10 +31,8 @@ export function SiteChrome() {
         </Link>
       ) : null}
 
-      {!isDashboard ? (
-        <div className="mx-auto max-w-7xl px-6 pb-8 lg:px-8">
-          <MarketingFooter variant="full" />
-        </div>
+      {!isDashboard && !hasCustomMarketingShell ? (
+        <MarketingFooter variant={isAuthPage ? 'auth' : 'full'} />
       ) : null}
     </>
   );

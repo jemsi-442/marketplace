@@ -16,13 +16,17 @@ use App\Security\BookingVoter;
 use App\Service\DeliveryAttachmentStorage;
 use App\Service\DeliverySubmissionLifecycleService;
 use App\Service\NotificationService;
+use App\Service\SignedDownloadTokenService;
+use App\Service\SignedObjectTransferTokenService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -37,7 +41,11 @@ final class DeliverySubmissionController extends AbstractController
         private readonly NotificationService $notificationService,
         private readonly DeliveryAttachmentStorage $deliveryAttachmentStorage,
         private readonly DeliverySubmissionLifecycleService $deliverySubmissionLifecycleService,
+        private readonly SignedDownloadTokenService $signedDownloadTokenService,
+        private readonly SignedObjectTransferTokenService $signedObjectTransferTokenService,
         private readonly UrlGeneratorInterface $urlGenerator,
+        #[Autowire(service: 'limiter.delivery_upload')]
+        private readonly RateLimiterFactory $deliveryUploadLimiter,
     ) {
     }
 
@@ -126,17 +134,26 @@ final class DeliverySubmissionController extends AbstractController
         $fileUrl = $attachment->getFileUrl();
 
         if ($attachment->getStoragePath() !== null && $delivery instanceof DeliverySubmission && $booking instanceof Booking) {
-            $fileUrl = $this->urlGenerator->generate('booking_delivery_attachment_download', [
-                'booking' => $booking->getId(),
-                'delivery' => $delivery->getId(),
-                'attachment' => $attachment->getId(),
-            ]);
+            $remoteLink = $this->deliveryAttachmentStorage->createTemporaryDownloadLink($attachment->getStoragePath());
+            if (is_array($remoteLink) && isset($remoteLink['url'])) {
+                $fileUrl = (string) $remoteLink['url'];
+            } else {
+                $token = $this->signedDownloadTokenService->issue('delivery_attachment_download', $attachment->getStoragePath());
+
+                $fileUrl = $this->urlGenerator->generate('booking_delivery_attachment_download', [
+                    'booking' => $booking->getId(),
+                    'delivery' => $delivery->getId(),
+                    'attachment' => $attachment->getId(),
+                    'expires' => $token['expires'],
+                    'signature' => $token['signature'],
+                ]);
+            }
         }
 
         return [
             'id' => $attachment->getId(),
             'file_name' => $attachment->getFileName(),
-            'file_url' => $fileUrl,
+            'file_url' => is_string($fileUrl) ? $fileUrl : '',
             'mime_type' => $attachment->getMimeType(),
             'size_bytes' => $attachment->getSizeBytes(),
             'created_at' => $attachment->getCreatedAt()->format('Y-m-d H:i:s'),
@@ -230,6 +247,19 @@ final class DeliverySubmissionController extends AbstractController
         return in_array($scheme, ['http', 'https'], true);
     }
 
+    private function enforceVendorDeliveryAccess(Booking $booking, User $user): ?JsonResponse
+    {
+        if (!$this->isAssignedVendor($booking, $user)) {
+            return $this->json(['error' => 'Only the assigned vendor can submit delivery'], 403);
+        }
+
+        if (!in_array($booking->getStatus(), [Booking::STATUS_CONFIRMED, Booking::STATUS_PENDING], true)) {
+            return $this->json(['error' => 'This booking is not ready for delivery submission'], 409);
+        }
+
+        return null;
+    }
+
     /**
      * @return array<int, UploadedFile>
      */
@@ -246,6 +276,69 @@ final class DeliverySubmissionController extends AbstractController
         }
 
         return array_values(array_filter($payload, static fn (mixed $file): bool => $file instanceof UploadedFile));
+    }
+
+    /**
+     * @return list<array{
+     *   file_name: string,
+     *   storage_path: string,
+     *   mime_type: string,
+     *   upload_token: string,
+     *   expires: int
+     * }>
+     */
+    private function normalizeStoredAttachments(mixed $payload): array
+    {
+        if ($payload === null) {
+            return [];
+        }
+
+        if (!is_array($payload)) {
+            throw new \InvalidArgumentException('stored_attachments must be an array');
+        }
+
+        if (count($payload) > self::MAX_ATTACHMENTS) {
+            throw new \InvalidArgumentException(sprintf('stored_attachments must not exceed %d items', self::MAX_ATTACHMENTS));
+        }
+
+        $attachments = [];
+        foreach ($payload as $index => $item) {
+            if (!is_array($item)) {
+                throw new \InvalidArgumentException(sprintf('stored_attachments[%d] must be an object', $index));
+            }
+
+            $fileName = isset($item['file_name']) && is_string($item['file_name']) ? trim($item['file_name']) : '';
+            $storagePath = isset($item['storage_path']) && is_string($item['storage_path']) ? trim($item['storage_path']) : '';
+            $mimeType = isset($item['mime_type']) && is_string($item['mime_type']) ? trim($item['mime_type']) : '';
+            $uploadToken = isset($item['upload_token']) && is_string($item['upload_token']) ? trim($item['upload_token']) : '';
+            $expires = isset($item['expires']) ? (int) $item['expires'] : 0;
+
+            if ($fileName === '' || mb_strlen($fileName) > 180) {
+                throw new \InvalidArgumentException(sprintf('stored_attachments[%d].file_name is required and must not exceed 180 characters', $index));
+            }
+            if ($storagePath === '' || mb_strlen($storagePath) > 500) {
+                throw new \InvalidArgumentException(sprintf('stored_attachments[%d].storage_path is required and must not exceed 500 characters', $index));
+            }
+            if ($mimeType === '' || mb_strlen($mimeType) > 120) {
+                throw new \InvalidArgumentException(sprintf('stored_attachments[%d].mime_type is required and must not exceed 120 characters', $index));
+            }
+            if ($uploadToken === '') {
+                throw new \InvalidArgumentException(sprintf('stored_attachments[%d].upload_token is required', $index));
+            }
+            if ($expires <= 0) {
+                throw new \InvalidArgumentException(sprintf('stored_attachments[%d].expires must be a valid unix timestamp', $index));
+            }
+
+            $attachments[] = [
+                'file_name' => $fileName,
+                'storage_path' => $storagePath,
+                'mime_type' => $mimeType,
+                'upload_token' => $uploadToken,
+                'expires' => $expires,
+            ];
+        }
+
+        return $attachments;
     }
 
     /**
@@ -289,6 +382,95 @@ final class DeliverySubmissionController extends AbstractController
         ]);
     }
 
+    #[Route('/direct-upload/prepare', name: 'booking_delivery_direct_upload_prepare', methods: ['POST'])]
+    public function prepareDirectUpload(Booking $booking, Request $request): JsonResponse
+    {
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            return $this->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $guard = $this->enforceVendorDeliveryAccess($booking, $user);
+        if ($guard instanceof JsonResponse) {
+            return $guard;
+        }
+
+        $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Invalid JSON payload'], 400);
+        }
+
+        $files = $data['files'] ?? null;
+        if (!is_array($files) || $files === []) {
+            return $this->json(['error' => 'files must be a non-empty array'], 400);
+        }
+        if (count($files) > self::MAX_ATTACHMENTS) {
+            return $this->json(['error' => sprintf('files must not exceed %d items', self::MAX_ATTACHMENTS)], 400);
+        }
+
+        $ipAddress = $request->getClientIp() ?? 'unknown';
+        $limiter = $this->deliveryUploadLimiter->create(sprintf('%d|%s', $user->getId() ?? 0, $ipAddress));
+        if (!$limiter->consume()->isAccepted()) {
+            return $this->json([
+                'error' => 'Too many delivery uploads. Try again after a short break.',
+            ], 429);
+        }
+
+        $preparedFiles = [];
+        try {
+            foreach ($files as $index => $item) {
+                if (!is_array($item)) {
+                    throw new \InvalidArgumentException(sprintf('files[%d] must be an object', $index));
+                }
+
+                $fileName = isset($item['file_name']) && is_string($item['file_name']) ? trim($item['file_name']) : '';
+                $mimeType = isset($item['mime_type']) && is_string($item['mime_type']) ? trim($item['mime_type']) : '';
+                if ($fileName === '') {
+                    throw new \InvalidArgumentException(sprintf('files[%d].file_name is required', $index));
+                }
+
+                $this->deliveryAttachmentStorage->assertSupportedMimeType($mimeType);
+                $prepared = $this->deliveryAttachmentStorage->prepareRemoteUploadForBooking($fileName, $mimeType, $booking->getId() ?? 0);
+                if ($prepared === null) {
+                    return $this->json([
+                        'error' => 'Direct delivery upload is not available for the current storage driver.',
+                    ], 409);
+                }
+
+                $token = $this->signedObjectTransferTokenService->issue('booking_delivery_direct_upload', $prepared['storage_path'], [
+                    'file_name' => $prepared['file_name'],
+                    'mime_type' => $prepared['mime_type'],
+                    'booking_id' => (int) ($booking->getId() ?? 0),
+                ]);
+
+                $preparedFiles[] = [
+                    'file_name' => $prepared['file_name'],
+                    'mime_type' => $prepared['mime_type'],
+                    'storage_path' => $prepared['storage_path'],
+                    'upload' => [
+                        'url' => $prepared['upload']['url'],
+                        'method' => $prepared['upload']['method'],
+                        'headers' => $prepared['upload']['headers'],
+                        'expires' => $prepared['upload']['expires'],
+                        'expires_at' => date(DATE_ATOM, $prepared['upload']['expires']),
+                    ],
+                    'finalize' => [
+                        'token' => $token['signature'],
+                        'expires' => $token['expires'],
+                        'expires_at' => date(DATE_ATOM, $token['expires']),
+                    ],
+                ];
+            }
+        } catch (\InvalidArgumentException $exception) {
+            return $this->json(['error' => $exception->getMessage()], 400);
+        }
+
+        return $this->json([
+            'message' => 'Direct delivery upload is ready.',
+            'files' => $preparedFiles,
+        ]);
+    }
+
     #[Route('', name: 'booking_delivery_submit', methods: ['POST'])]
     public function submit(Booking $booking, Request $request, EntityManagerInterface $em): JsonResponse
     {
@@ -296,13 +478,9 @@ final class DeliverySubmissionController extends AbstractController
         if (!$user instanceof User) {
             return $this->json(['error' => 'Unauthorized'], 403);
         }
-
-        if (!$this->isAssignedVendor($booking, $user)) {
-            return $this->json(['error' => 'Only the assigned vendor can submit delivery'], 403);
-        }
-
-        if (!in_array($booking->getStatus(), [Booking::STATUS_CONFIRMED, Booking::STATUS_PENDING], true)) {
-            return $this->json(['error' => 'This booking is not ready for delivery submission'], 409);
+        $guard = $this->enforceVendorDeliveryAccess($booking, $user);
+        if ($guard instanceof JsonResponse) {
+            return $guard;
         }
 
         $hasFormPayload = $request->request->count() > 0 || $request->files->count() > 0;
@@ -321,10 +499,21 @@ final class DeliverySubmissionController extends AbstractController
         try {
             $attachments = $this->normalizeAttachments($payload['attachments'] ?? null);
             $deliveryLink = $this->normalizeOptionalExternalUrl($deliveryLink, 'delivery_link');
+            $storedAttachments = $this->normalizeStoredAttachments($payload['stored_attachments'] ?? null);
         } catch (\InvalidArgumentException $exception) {
             return $this->json(['error' => $exception->getMessage()], 400);
         }
         $uploadedFiles = $this->normalizeUploadedFiles($request);
+
+        if ($uploadedFiles !== []) {
+            $ipAddress = $request->getClientIp() ?? 'unknown';
+            $limiter = $this->deliveryUploadLimiter->create(sprintf('%d|%s', $user->getId() ?? 0, $ipAddress));
+            if (!$limiter->consume()->isAccepted()) {
+                return $this->json([
+                    'error' => 'Too many delivery uploads. Try again after a short break.',
+                ], 429);
+            }
+        }
 
         if (mb_strlen($deliveryNote) < 12) {
             return $this->json(['error' => 'delivery_note must be at least 12 characters'], 400);
@@ -366,8 +555,39 @@ final class DeliverySubmissionController extends AbstractController
                     ->setSizeBytes($stored['size_bytes']);
                 $delivery->addAttachment($attachment);
             }
-        } catch (\InvalidArgumentException|\RuntimeException $exception) {
+
+            foreach ($storedAttachments ?? [] as $storedAttachment) {
+                if (!$this->signedObjectTransferTokenService->isValid('booking_delivery_direct_upload', $storedAttachment['storage_path'], [
+                    'file_name' => $storedAttachment['file_name'],
+                    'mime_type' => $storedAttachment['mime_type'],
+                    'booking_id' => (int) ($booking->getId() ?? 0),
+                ], $storedAttachment['expires'], $storedAttachment['upload_token'])) {
+                    throw new \InvalidArgumentException('One direct-upload attachment token is invalid or has expired.');
+                }
+
+                $absolutePath = $this->deliveryAttachmentStorage->resolveStoredAttachmentPath($storedAttachment['storage_path']);
+                if ($absolutePath === null) {
+                    throw new \InvalidArgumentException('One direct-upload attachment was not found after upload.');
+                }
+
+                $validated = $this->deliveryAttachmentStorage->validateStoredAttachmentObject(
+                    $absolutePath,
+                    $storedAttachment['file_name']
+                );
+
+                $attachment = new DeliveryAttachment();
+                $attachment
+                    ->setFileName($storedAttachment['file_name'])
+                    ->setFileUrl('')
+                    ->setStoragePath($storedAttachment['storage_path'])
+                    ->setMimeType($validated['mime_type'])
+                    ->setSizeBytes($validated['size_bytes']);
+                $delivery->addAttachment($attachment);
+            }
+        } catch (\InvalidArgumentException $exception) {
             return $this->json(['error' => $exception->getMessage()], 400);
+        } catch (\RuntimeException $exception) {
+            return $this->json(['error' => $exception->getMessage()], 503);
         }
 
         $em->persist($delivery);
@@ -396,7 +616,8 @@ final class DeliverySubmissionController extends AbstractController
     public function downloadAttachment(
         Booking $booking,
         DeliverySubmission $delivery,
-        DeliveryAttachment $attachment
+        DeliveryAttachment $attachment,
+        Request $request
     ): BinaryFileResponse|JsonResponse {
         $user = $this->getUser();
         if (!$user instanceof User) {
@@ -413,7 +634,18 @@ final class DeliverySubmissionController extends AbstractController
             return $this->json(['error' => 'Attachment does not belong to this delivery'], 404);
         }
 
-        $absolutePath = $this->deliveryAttachmentStorage->resolveStoredAttachmentPath($attachment->getStoragePath());
+        $storagePath = $attachment->getStoragePath();
+        if ($storagePath === null) {
+            return $this->json(['error' => 'Stored attachment file was not found'], 404);
+        }
+
+        $expires = (int) $request->query->get('expires', 0);
+        $signature = $request->query->get('signature');
+        if (!$this->signedDownloadTokenService->isValid('delivery_attachment_download', $storagePath, $expires, is_string($signature) ? $signature : null)) {
+            return $this->json(['error' => 'Download link is invalid or has expired'], 403);
+        }
+
+        $absolutePath = $this->deliveryAttachmentStorage->resolveStoredAttachmentPath($storagePath);
         if ($absolutePath === null) {
             return $this->json(['error' => 'Stored attachment file was not found'], 404);
         }

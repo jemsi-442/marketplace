@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Share2 } from 'lucide-react';
+import { Smartphone } from 'lucide-react';
 
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { useInstallStore } from '@/lib/pwa/install-store';
@@ -37,8 +37,6 @@ export function InstallCtaButton({
         ? 'Install'
         : 'Add to home screen';
 
-  const Icon = mode === 'browser' ? Download : Share2;
-
   return (
     <Button
       type="button"
@@ -55,7 +53,7 @@ export function InstallCtaButton({
       }}
       aria-expanded={isVisible}
     >
-      <Icon className="mr-2 size-4" />
+      <Smartphone className="mr-2 size-4" />
       {buttonLabel}
     </Button>
   );

@@ -10,7 +10,12 @@
     "start": "next start",
     "clean:cache": "rm -rf .next",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "build:e2e:prod": "PLAYWRIGHT_BUILD_SKIP_TYPECHECK=1 PLAYWRIGHT_BUILD_SINGLE_WORKER=1 npm run build",
+    "test:e2e:prod": "npm run build:e2e:prod && playwright test -c playwright.prod.config.ts",
+    "test:e2e:prod:auth": "npm run build:e2e:prod && playwright test -c playwright.prod.config.ts tests/e2e/authenticated-smoke.spec.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -28,6 +33,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4.1.13",
     "@types/node": "^24.5.2",
     "@types/react": "^19.1.13",

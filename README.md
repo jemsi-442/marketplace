@@ -106,6 +106,7 @@ Useful docs:
 - [Request Marketplace Architecture](./docs/request-marketplace-architecture.md)
 - [List Endpoint Conventions](./docs/list-endpoint-conventions.md)
 - [Release QA Checklist](./docs/release-qa-checklist.md)
+- [Upload Malware Scanning](./docs/upload-malware-scanning.md)
 
 ## Run Locally
 
@@ -183,7 +184,7 @@ bash run_test_env_command.sh php bin/phpunit tests/Api
 Current expected result:
 
 ```text
-OK (38 tests, 868 assertions)
+OK (53 tests, 1054 assertions)
 ```
 
 ### Focused Backend Suites
@@ -221,6 +222,7 @@ This repository now includes hardening around:
 6. capability save-path query reduction
 7. calmer frontend query/refetch behavior across dashboards
 8. Google/GitHub social login using the same backend session model
+9. upload rate limiting and ClamAV-ready malware scanning hooks
 
 ## Release Readiness
 

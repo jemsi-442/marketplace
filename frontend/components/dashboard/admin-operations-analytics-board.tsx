@@ -1,12 +1,9 @@
+import { AnalyticsSectionCard } from '@/components/dashboard/analytics-section-card';
+import { AnalyticsKpiCard } from '@/components/dashboard/analytics-kpi-card';
 import { MetricsTrendChart } from '@/components/dashboard/metrics-trend-chart';
+import { SignalMeterGrid } from '@/components/dashboard/signal-meter-grid';
+import { formatCompactNumber } from '@/components/dashboard/chart-utils';
 import type { AdminMetricsHealth, AdminMetricsTrendResponse, AdminRiskOverview } from '@/lib/types';
-
-function formatCompact(value: number): string {
-  return new Intl.NumberFormat('en', {
-    notation: 'compact',
-    maximumFractionDigits: value >= 1000 ? 1 : 0,
-  }).format(value);
-}
 
 function getHealthSignal(metrics?: AdminMetricsHealth) {
   if (!metrics) {
@@ -124,57 +121,71 @@ export function AdminOperationsAnalyticsBoard({
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_340px]">
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <div className={`rounded-[22px] border p-4 ${healthSignal.cardClasses}`}>
-              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Platform health</p>
-              <p className="mt-3 font-display text-2xl text-[var(--text-primary)]">{healthSignal.chip}</p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">{metrics?.message ?? healthSignal.helper}</p>
-            </div>
-            <div className="rounded-[22px] border border-[rgba(255,143,143,0.18)] bg-[rgba(255,143,143,0.08)] p-4">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Open disputes</p>
-              <p className="mt-3 font-display text-2xl text-[var(--text-primary)]">{openDisputes}</p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">Cases still waiting for intervention</p>
-            </div>
-            <div className="rounded-[22px] border border-[rgba(242,198,109,0.18)] bg-[rgba(242,198,109,0.08)] p-4">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Critical users</p>
-              <p className="mt-3 font-display text-2xl text-[var(--text-primary)]">{criticalUsers}</p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">Highest attention accounts</p>
-            </div>
-            <div className="rounded-[22px] border border-[rgba(111,215,255,0.18)] bg-[rgba(111,215,255,0.08)] p-4">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Fraud captures</p>
-              <p className="mt-3 font-display text-2xl text-[var(--text-primary)]">{fraudCaptures}</p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">Recent fraud snapshots</p>
-            </div>
-            <div className="rounded-[22px] border border-[rgba(188,164,255,0.18)] bg-[rgba(188,164,255,0.08)] p-4">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Fees collected</p>
-              <p className="mt-3 font-display text-2xl text-[var(--text-primary)]">{trend ? formatCompact(trend.summary.total_fees_collected_minor) : '--'}</p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">Window revenue capture</p>
-            </div>
-            <div className="rounded-[22px] border border-[rgba(140,203,255,0.18)] bg-[rgba(140,203,255,0.08)] p-4">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Trust watchlist</p>
-              <p className="mt-3 font-display text-2xl text-[var(--text-primary)]">{trustWatchlist}</p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">Businesses under review</p>
-            </div>
+            <AnalyticsKpiCard
+              label="Platform health"
+              value={healthSignal.chip}
+              detail={metrics?.message ?? healthSignal.helper}
+              accent={metrics?.is_stale ? 'var(--accent-coral)' : metrics?.status === 'NO_DATA' ? 'var(--accent-amber)' : 'var(--accent-teal)'}
+              chip="Pipeline"
+              tone={metrics?.is_stale ? 'rgba(249,115,22,0.08)' : metrics?.status === 'NO_DATA' ? 'rgba(245,158,11,0.08)' : 'rgba(20,184,166,0.08)'}
+            />
+            <AnalyticsKpiCard
+              label="Open disputes"
+              value={String(openDisputes)}
+              detail="Cases still waiting for intervention"
+              accent="var(--accent-coral)"
+              chip="Cases"
+              tone="rgba(255,143,143,0.08)"
+            />
+            <AnalyticsKpiCard
+              label="Critical users"
+              value={String(criticalUsers)}
+              detail="Highest attention accounts"
+              accent="var(--accent-amber)"
+              chip="Watch"
+              tone="rgba(242,198,109,0.08)"
+            />
+            <AnalyticsKpiCard
+              label="Fraud captures"
+              value={String(fraudCaptures)}
+              detail="Recent fraud snapshots"
+              accent="var(--accent-cyan)"
+              chip="Fraud"
+              tone="rgba(111,215,255,0.08)"
+            />
+            <AnalyticsKpiCard
+              label="Fees collected"
+              value={trend ? formatCompactNumber(trend.summary.total_fees_collected_minor) : '--'}
+              detail="Window revenue capture"
+              accent="var(--accent-violet)"
+              chip="Revenue"
+              tone="rgba(188,164,255,0.08)"
+            />
+            <AnalyticsKpiCard
+              label="Trust watchlist"
+              value={String(trustWatchlist)}
+              detail="Businesses under review"
+              accent="var(--accent-cyan)"
+              chip="Trust"
+              tone="rgba(140,203,255,0.08)"
+            />
           </div>
 
-          <div className="rounded-[26px] border border-[var(--line)] bg-[var(--panel-muted)] p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">Marketplace trend</p>
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">Track volume and high-risk escrow movement across the current window.</p>
-              </div>
-              <div className="rounded-full border border-[rgba(111,215,255,0.18)] bg-[rgba(111,215,255,0.08)] px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-[var(--accent-cyan)]">
-                {trend?.window_days ?? days} day window
-              </div>
-            </div>
-
-            <div className="mt-5">
+          <AnalyticsSectionCard
+            title="Marketplace trend"
+            description="Track volume and high-risk escrow movement across the current window."
+            chip={`${trend?.window_days ?? days} day window`}
+            accent="var(--accent-cyan)"
+          >
+            <div>
               {trend ? <MetricsTrendChart points={trend.trend} /> : <div className="rounded-[22px] border border-[var(--line)] bg-[var(--panel-strong)] p-5 text-sm text-[var(--text-secondary)]">Trend data will appear here once the current window loads.</div>}
             </div>
-          </div>
+          </AnalyticsSectionCard>
         </div>
 
-        <div className="space-y-4">
-          {[
+        <SignalMeterGrid
+          columnsClassName="grid-cols-1"
+          items={[
             {
               label: 'Snapshot freshness',
               value: metrics?.status === 'NO_DATA' ? 0 : freshnessPercent,
@@ -183,39 +194,22 @@ export function AdminOperationsAnalyticsBoard({
                 : metrics?.snapshot_age_hours !== undefined
                   ? `${metrics.snapshot_age_hours}h since last snapshot`
                   : 'Waiting for snapshot age',
-              tone: 'var(--accent-teal)',
+              color: 'var(--accent-teal)',
             },
             {
               label: 'Risk density',
               value: riskDensity,
               helper: usersMonitored ? `${highRiskUsers} of ${usersMonitored} monitored users` : 'Waiting for watchlist density',
-              tone: 'var(--accent-coral)',
+              color: 'var(--accent-coral)',
             },
             {
               label: 'Dispute pressure',
               value: Math.min(disputePressure, 100),
               helper: actionableAccounts ? `${actionableAccounts} accounts need attention` : 'Waiting for action queue',
-              tone: 'var(--accent-amber)',
+              color: 'var(--accent-amber)',
             },
-          ].map((item) => (
-            <div key={item.label} className="rounded-[22px] border border-[var(--line)] bg-[var(--panel-muted)] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs uppercase tracking-[0.16em] text-[var(--text-tertiary)]">{item.label}</p>
-                <span className="text-sm text-[var(--text-primary)]">{item.value}%</span>
-              </div>
-              <div className="mt-3 h-2 rounded-full bg-[rgba(148,163,184,0.18)]">
-                <div
-                  className="h-2 rounded-full"
-                  style={{
-                    width: `${Math.min(item.value, 100)}%`,
-                    backgroundColor: item.tone,
-                  }}
-                />
-              </div>
-              <p className="mt-3 text-sm text-[var(--text-secondary)]">{item.helper}</p>
-            </div>
-          ))}
-        </div>
+          ]}
+        />
       </div>
     </div>
   );

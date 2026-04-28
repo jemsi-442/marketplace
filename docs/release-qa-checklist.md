@@ -15,7 +15,7 @@ bash run_test_env_command.sh php bin/phpunit tests/Api
 Expected result:
 
 ```text
-OK (36 tests, 839 assertions)
+OK (53 tests, 1054 assertions)
 ```
 
 ### Frontend
@@ -88,6 +88,7 @@ Verify:
 1. Submit a delivery with an allowed file type.
 2. Confirm the attachment opens via the secure application route, not a raw public uploads URL.
 3. Confirm the response is access-controlled.
+4. If malware scanning is enabled in the environment, verify uploads fail safely when the scanner reports malware.
 
 ### Role Boundaries
 

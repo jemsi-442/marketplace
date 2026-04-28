@@ -1,8 +1,20 @@
 parameters:
     env(APP_ENV): 'dev'
     env(APP_SECRET): 'your_secret_here'
+    env(OBJECT_STORAGE_DRIVER): 'local'
+    env(OBJECT_STORAGE_BUCKET): ''
+    env(OBJECT_STORAGE_REGION): ''
+    env(OBJECT_STORAGE_ENDPOINT): ''
+    env(OBJECT_STORAGE_ACCESS_KEY): ''
+    env(OBJECT_STORAGE_SECRET_KEY): ''
+    env(OBJECT_STORAGE_PATH_STYLE): '1'
+    env(UPLOAD_SCAN_ENABLED): '0'
+    env(UPLOAD_SCAN_BINARY): 'clamscan'
+    env(UPLOAD_SCAN_TIMEOUT_SECONDS): '20'
+    env(UPLOAD_SCAN_FAIL_CLOSED): '1'
     delivery.attachments.upload_dir: '%kernel.project_dir%/var/uploads/deliveries'
     delivery.attachments.legacy_public_upload_dir: '%kernel.project_dir%/public/uploads/deliveries'
+    vendor.resume.upload_dir: '%kernel.project_dir%/var/uploads/vendor-resumes'
     ai.trust.weights:
         rating: 0.22
         escrow_release_ratio: 0.23
@@ -103,13 +115,65 @@ services:
             $baseUrl: '%env(SNIPPE_BASE_URL)%'
             $webhookSecret: '%env(SNIPPE_WEBHOOK_SECRET)%'
 
+    App\Service\ConfigurableObjectStorage:
+        arguments:
+            $driver: '%env(string:OBJECT_STORAGE_DRIVER)%'
+            $localFilesystemObjectStorage: '@App\Service\LocalFilesystemObjectStorage'
+            $s3CompatibleObjectStorage: '@App\Service\S3CompatibleObjectStorage'
+
+    App\Service\ObjectStorageInterface: '@App\Service\ConfigurableObjectStorage'
+
+    App\Service\S3CompatibleObjectStorage:
+        arguments:
+            $driver: '%env(string:OBJECT_STORAGE_DRIVER)%'
+            $bucket: '%env(default::OBJECT_STORAGE_BUCKET)%'
+            $region: '%env(default::OBJECT_STORAGE_REGION)%'
+            $endpoint: '%env(default::OBJECT_STORAGE_ENDPOINT)%'
+            $accessKey: '%env(default::OBJECT_STORAGE_ACCESS_KEY)%'
+            $secretKey: '%env(default::OBJECT_STORAGE_SECRET_KEY)%'
+            $pathStyle: '%env(bool:OBJECT_STORAGE_PATH_STYLE)%'
+
     App\Service\DeliveryAttachmentStorage:
         arguments:
             $uploadDir: '%delivery.attachments.upload_dir%'
             $legacyPublicUploadDir: '%delivery.attachments.legacy_public_upload_dir%'
+            $objectStorage: '@App\Service\ObjectStorageInterface'
+            $uploadedFileSecurityInspector: '@App\Service\UploadedFileSecurityInspector'
+            $uploadMalwareScanner: '@App\Service\UploadMalwareScanner'
 
     App\Service\DeliverySubmissionLifecycleService:
         public: true
+
+    App\Service\VendorResumeStorage:
+        arguments:
+            $uploadDir: '%vendor.resume.upload_dir%'
+            $objectStorage: '@App\Service\ObjectStorageInterface'
+            $uploadedFileSecurityInspector: '@App\Service\UploadedFileSecurityInspector'
+            $uploadMalwareScanner: '@App\Service\UploadMalwareScanner'
+
+    App\Service\UploadMalwareScanner:
+        arguments:
+            $enabled: '%env(bool:UPLOAD_SCAN_ENABLED)%'
+            $binaryPath: '%env(string:UPLOAD_SCAN_BINARY)%'
+            $timeoutSeconds: '%env(int:UPLOAD_SCAN_TIMEOUT_SECONDS)%'
+            $failClosed: '%env(bool:UPLOAD_SCAN_FAIL_CLOSED)%'
+
+    App\Service\OperationsDiagnosticsService:
+        arguments:
+            $objectStorageDriver: '%env(string:OBJECT_STORAGE_DRIVER)%'
+            $uploadScanEnabled: '%env(bool:UPLOAD_SCAN_ENABLED)%'
+            $uploadScanBinary: '%env(string:UPLOAD_SCAN_BINARY)%'
+            $uploadScanTimeoutSeconds: '%env(int:UPLOAD_SCAN_TIMEOUT_SECONDS)%'
+            $uploadScanFailClosed: '%env(bool:UPLOAD_SCAN_FAIL_CLOSED)%'
+            $appEnv: '%env(string:APP_ENV)%'
+
+    App\Service\SignedDownloadTokenService:
+        arguments:
+            $appSecret: '%env(string:APP_SECRET)%'
+
+    App\Service\SignedObjectTransferTokenService:
+        arguments:
+            $appSecret: '%env(string:APP_SECRET)%'
 
     App\EventSubscriber\TransactionSubscriber:
         tags: ['doctrine.event_subscriber']

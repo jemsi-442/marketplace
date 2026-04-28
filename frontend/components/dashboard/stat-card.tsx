@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 
+import { accentToRgba } from '@/components/dashboard/chart-utils';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-interface StatCardProps {
+export interface StatCardProps {
   eyebrow: string;
   value: string;
   detail: string;
@@ -21,18 +22,52 @@ const statCardIconShells: Record<NonNullable<StatCardProps['variant']>, string> 
   market: 'bg-[rgba(245,158,11,0.12)] text-[var(--accent-amber)]',
 };
 
+const statCardAccents: Record<NonNullable<StatCardProps['variant']>, string> = {
+  default: 'var(--brand-primary)',
+  finance: 'var(--accent-teal)',
+  communication: 'var(--accent-violet)',
+  risk: '#e11d48',
+  guidance: 'var(--accent-slate)',
+  activity: 'var(--accent-cyan)',
+  market: 'var(--accent-amber)',
+};
+
 export function StatCard({ eyebrow, value, detail, icon, variant = 'default' }: StatCardProps) {
+  const accent = statCardAccents[variant];
+
   return (
     <Card variant={variant} className="relative overflow-hidden">
-      <div className="absolute right-3 top-3 rounded-full border border-[var(--line)] bg-white/92 px-2.5 py-1 text-[9px] uppercase tracking-[0.16em] text-[var(--text-tertiary)] shadow-[0_8px_18px_rgba(15,23,42,0.05)] sm:right-4 sm:top-4 sm:px-3 sm:py-1.5 sm:text-[10px]">
-        Signal
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-24"
+        style={{
+          background: `radial-gradient(circle at top right, ${accentToRgba(accent, 0.18)} 0%, rgba(255,255,255,0) 72%)`,
+        }}
+      />
+      <div
+        className="pointer-events-none absolute left-4 top-0 h-1.5 w-20 rounded-b-full"
+        style={{
+          background: `linear-gradient(90deg, ${accentToRgba(accent, 0.34)} 0%, ${accent} 100%)`,
+          boxShadow: `0 12px 24px ${accentToRgba(accent, 0.18)}`,
+        }}
+      />
+      <div className="absolute right-3 top-3 rounded-full border border-[var(--line)] bg-white/92 px-2.5 py-1 text-[9px] uppercase tracking-[0.18em] text-[var(--text-tertiary)] shadow-[0_8px_18px_rgba(15,23,42,0.05)] sm:right-4 sm:top-4 sm:px-3 sm:py-1.5 sm:text-[10px]">
+        Live signal
       </div>
-      <div className={cn('mb-3 flex size-11 items-center justify-center rounded-2xl border border-[var(--line)] shadow-[0_10px_24px_rgba(15,23,42,0.05)] sm:mb-4 sm:size-12', statCardIconShells[variant])}>
+      <div className={cn('relative z-[1] mb-3 flex size-11 items-center justify-center rounded-2xl border border-[var(--line)] shadow-[0_10px_24px_rgba(15,23,42,0.05)] sm:mb-4 sm:size-12', statCardIconShells[variant])}>
         {icon}
       </div>
-      <p className="mb-3 text-[10px] uppercase tracking-[0.2em] text-[var(--text-tertiary)]">{eyebrow}</p>
-      <p className="max-w-[16rem] font-display text-[1.65rem] leading-tight text-[var(--text-primary)] sm:text-3xl lg:text-[2rem]">{value}</p>
-      <p className="mt-2.5 max-w-[18rem] text-[13px] leading-6 text-[var(--text-secondary)] sm:mt-3 sm:text-sm">{detail}</p>
+      <p className="relative z-[1] mb-3 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--text-tertiary)]">{eyebrow}</p>
+      <p className="relative z-[1] max-w-[16rem] font-display text-[1.72rem] leading-[1.02] tracking-[-0.04em] text-[var(--text-primary)] sm:text-[2rem] lg:text-[2.15rem]">{value}</p>
+      <div className="relative z-[1] mt-3 h-[3px] w-20 rounded-full bg-[rgba(255,255,255,0.72)]">
+        <div
+          className="h-[3px] rounded-full"
+          style={{
+            width: '100%',
+            background: `linear-gradient(90deg, ${accentToRgba(accent, 0.56)} 0%, ${accent} 100%)`,
+          }}
+        />
+      </div>
+      <p className="relative z-[1] mt-3 max-w-[18rem] text-[13px] leading-6 text-[var(--text-secondary)] sm:text-sm">{detail}</p>
     </Card>
   );
 }
