@@ -843,4 +843,45 @@ test.describe('Authenticated smoke flows', () => {
     await expect(page.getByRole('button', { name: /download resume/i })).toBeVisible({ timeout: renderTimeout });
     await expect(page.getByRole('button', { name: /approve blue tick/i })).toBeVisible({ timeout: renderTimeout });
   });
+
+  test('admin can approve vendor verification after authentication', async ({ page, request }) => {
+    const fixture = seedAdminVerificationFixture();
+
+    await authenticateBrowserSession(request, page, fixture.admin.email, fixture.admin.password);
+    await browserJsonGet(page, '/backend-api/api/protected/me');
+
+    await page.goto(`/dashboard/admin-verifications/${fixture.profile_id}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Loading workspace...')).not.toBeVisible({ timeout: renderTimeout });
+
+    await page
+      .getByPlaceholder('Write the reason clearly. If you revoke the badge, explain what proof is still missing.')
+      .fill('Interview proof is clear enough for badge approval.');
+    await page.getByRole('button', { name: /approve blue tick/i }).click();
+
+    await expect(page.getByText('Vendor verification approved and blue tick is active.')).toBeVisible({ timeout: renderTimeout });
+    await expect(page.getByText('Blue tick active').first()).toBeVisible({ timeout: renderTimeout });
+  });
+
+  test('admin can revoke vendor verification after authentication', async ({ page, request }) => {
+    const fixture = seedAdminVerificationFixture();
+    const revokeNote = 'Revoke until the vendor adds stronger handoff evidence.';
+
+    await authenticateBrowserSession(request, page, fixture.admin.email, fixture.admin.password);
+    await browserJsonGet(page, '/backend-api/api/protected/me');
+
+    await page.goto(`/dashboard/admin-verifications/${fixture.profile_id}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Loading workspace...')).not.toBeVisible({ timeout: renderTimeout });
+
+    const reviewNote = page.getByPlaceholder('Write the reason clearly. If you revoke the badge, explain what proof is still missing.');
+    await reviewNote.fill('Approve first so revoke checks the full badge lifecycle.');
+    await page.getByRole('button', { name: /approve blue tick/i }).click();
+    await expect(page.getByText('Vendor verification approved and blue tick is active.')).toBeVisible({ timeout: renderTimeout });
+
+    await reviewNote.fill(revokeNote);
+    await page.getByRole('button', { name: /revoke blue tick/i }).click();
+
+    await expect(page.getByText('Vendor verification badge revoked and the profile now needs revision.')).toBeVisible({ timeout: renderTimeout });
+    await expect(page.getByText('Needs revision').first()).toBeVisible({ timeout: renderTimeout });
+    await expect(page.getByText(revokeNote).first()).toBeVisible({ timeout: renderTimeout });
+  });
 });
